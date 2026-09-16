@@ -1,0 +1,2078 @@
+<!DOCTYPE html>
+<html lang="vi">
+<!-- Hallmark · pre-emit critique: P5 H5 E5 S5 R5 V5 · genre: modern-minimal · macrostructure: workbench · theme: cobalt -->
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Dola Studio — AI Video Generation & Render Gateway</title>
+<!-- Google Fonts: Space Grotesk (Display) + Inter (Body) + JetBrains Mono (Code/Labels) -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ---- Hallmark Cobalt Design System Tokens ---- */
+:root {
+  /* Paper & Grounds */
+  --color-paper-1: #f8fafc; /* Cool engineered paper oklch(98.5% 0.004 250) */
+  --color-paper-2: #ffffff; /* Crisp white surface */
+  --color-paper-3: #f1f5f9; /* Muted tech surface */
+  --color-paper-hover: #f8fafc;
+  
+  /* Hairline Rules (Drawn with a ruler, no blurry shadows) */
+  --color-rule: #e2e8f0;
+  --color-rule-strong: #cbd5e1;
+  --color-rule-subtle: #f1f5f9;
+
+  /* Cool Inks */
+  --color-ink-1: #0f172a; /* Deep charcoal ink oklch(24% 0.02 258) */
+  --color-ink-2: #334155; /* Secondary text */
+  --color-ink-3: #64748b; /* Muted labels & mono metadata */
+
+  /* Electric Cobalt Signal Accent (< 5% viewport usage) */
+  --color-accent: #2563eb; /* Electric cobalt oklch(58% 0.20 256) */
+  --color-accent-hover: #1d4ed8;
+  --color-accent-subtle: #eff6ff;
+  --color-accent-border: #bfdbfe;
+
+  /* Functional Status Colors */
+  --color-danger: #dc2626;
+  --color-danger-subtle: #fef2f2;
+  --color-danger-border: #fecaca;
+  --color-warning: #d97706;
+  --color-warning-subtle: #fffbeb;
+  --color-warning-border: #fde68a;
+  --color-info: #0284c7;
+  --color-info-subtle: #f0f9ff;
+  --color-info-border: #bae6fd;
+  --color-success: #16a34a;
+  --color-success-subtle: #f0fdf4;
+  --color-success-border: #bbf7d0;
+
+  /* Focus Ring */
+  --color-focus: rgba(37, 99, 235, 0.22);
+
+  /* Hallmark Technical Radii (Tight & Architectural) */
+  --radius-xs: 4px;
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 10px;
+
+  /* Fonts */
+  --font-display: "Space Grotesk", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Tactile Physics */
+  --ease-spring: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.04);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.06), 0 2px 4px -2px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  overflow-x: clip;
+  background-color: var(--color-paper-1);
+  color: var(--color-ink-1);
+  font-family: var(--font-body);
+  font-size: 13.5px;
+  line-height: 1.5;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Typography Hierarchy */
+h1, h2, h3, h4, .font-display {
+  font-family: var(--font-display);
+  font-style: normal;
+  letter-spacing: -0.02em;
+  color: var(--color-ink-1);
+}
+
+.mono-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-ink-3);
+  margin-bottom: 6px;
+}
+
+a {
+  color: var(--color-accent);
+  text-decoration: none;
+  transition: color 0.15s ease;
+}
+a:hover {
+  color: var(--color-accent-hover);
+}
+
+/* Hallmark Flush Instrument Header */
+header {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: 56px;
+  padding: 0 24px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--color-rule);
+}
+
+.brand-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.brand-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: -0.025em;
+  color: var(--color-ink-1);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.brand-version {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 6px;
+  border-radius: var(--radius-xs);
+  background: var(--color-paper-3);
+  color: var(--color-ink-2);
+  border: 1px solid var(--color-rule);
+}
+
+/* Hallmark ⌘K Palette Button */
+.cmd-k-trigger {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  background: var(--color-paper-3);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-3);
+  font-size: 12.5px;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s var(--ease-spring);
+}
+.cmd-k-trigger:hover {
+  background: #ffffff;
+  border-color: var(--color-rule-strong);
+  color: var(--color-ink-1);
+  box-shadow: var(--shadow-sm);
+}
+.kbd-shortcut {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 1px 5px;
+  background: #ffffff;
+  border: 1px solid var(--color-rule-strong);
+  border-radius: 4px;
+  color: var(--color-ink-2);
+}
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.live-indicator {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--color-paper-3);
+  border: 1px solid var(--color-rule);
+}
+.live-pulse-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--color-success);
+  box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7);
+  animation: pulse 2s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0.7); }
+  70% { transform: scale(1); box-shadow: 0 0 0 6px rgba(22, 163, 74, 0); }
+  100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(22, 163, 74, 0); }
+}
+
+/* Nav Rail (Numbered Modern-Minimal Tabs) */
+.nav-rail {
+  background: #ffffff;
+  border-bottom: 1px solid var(--color-rule);
+  padding: 0 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.nav-rail::-webkit-scrollbar { display: none; }
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 18px;
+  border: none;
+  background: transparent;
+  color: var(--color-ink-3);
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  position: relative;
+  transition: color 0.16s var(--ease-spring);
+}
+.nav-item:hover {
+  color: var(--color-ink-1);
+}
+.nav-item.active {
+  color: var(--color-accent);
+}
+.nav-item.active::after {
+  content: "";
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--color-accent);
+}
+.nav-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  opacity: 0.6;
+}
+
+/* Main Container */
+main {
+  max-width: 1420px;
+  margin: 0 auto;
+  padding: 24px;
+}
+
+/* Hallmark 05 · Workbench Grid */
+.workbench-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.18fr) minmax(0, 0.82fr);
+  gap: 20px;
+  align-items: start;
+}
+.workbench-grid > * {
+  min-width: 0;
+}
+@media (max-width: 1080px) {
+  .workbench-grid { grid-template-columns: 1fr; }
+}
+
+/* Switch Toggle Component */
+.switch-toggle {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+  vertical-align: middle;
+}
+.switch-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.switch-toggle .slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: var(--color-rule-strong);
+  transition: .18s var(--ease-spring);
+  border-radius: 20px;
+}
+.switch-toggle .slider:before {
+  position: absolute;
+  content: "";
+  height: 14px;
+  width: 14px;
+  left: 3px;
+  bottom: 3px;
+  background-color: white;
+  transition: .18s var(--ease-spring);
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+}
+.switch-toggle input:checked + .slider {
+  background-color: #059669;
+}
+.switch-toggle input:checked + .slider:before {
+  transform: translateX(16px);
+}
+
+/* Workbench Panel */
+.wb-panel {
+  background: #ffffff;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-lg);
+  padding: 22px;
+  box-shadow: var(--shadow-sm);
+}
+
+.wb-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--color-rule);
+}
+.wb-title {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* Buttons (Tactile Spring Physics) */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 7px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-rule-strong);
+  background: #ffffff;
+  color: var(--color-ink-1);
+  font-family: var(--font-body);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-spring);
+  text-decoration: none;
+  user-select: none;
+}
+.btn:hover {
+  background: var(--color-paper-3);
+  border-color: var(--color-rule-strong);
+  transform: translateY(-1px);
+}
+.btn:active {
+  transform: translateY(1px);
+}
+.btn-p {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: #ffffff;
+  font-weight: 600;
+}
+.btn-p:hover {
+  background: var(--color-accent-hover);
+  border-color: var(--color-accent-hover);
+  color: #ffffff;
+}
+.btn-sm {
+  padding: 4px 9px;
+  font-size: 12px;
+}
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none !important;
+}
+
+/* Form Controls */
+.form-group {
+  margin-bottom: 16px;
+}
+.form-label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--color-ink-2);
+  margin-bottom: 6px;
+}
+.form-control {
+  width: 100%;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--color-rule);
+  background: #ffffff;
+  color: var(--color-ink-1);
+  font-family: inherit;
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+.form-control:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px var(--color-focus);
+}
+
+/* Segmented Toggle Pills (Model & Ratios) */
+.pill-group {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px;
+}
+.pill-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 10px;
+  background: var(--color-paper-3);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  color: var(--color-ink-2);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s var(--ease-spring);
+  text-align: center;
+}
+.pill-btn:hover {
+  background: #ffffff;
+  border-color: var(--color-rule-strong);
+}
+.pill-btn.active {
+  background: #ffffff;
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  box-shadow: 0 0 0 1px var(--color-accent), var(--shadow-sm);
+}
+.pill-meta {
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--color-ink-3);
+  margin-top: 2px;
+}
+
+/* Reference Images Grid */
+.ref-thumb-card {
+  background: var(--color-paper-2);
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: all 0.16s var(--ease-spring);
+}
+.ref-thumb-card:hover {
+  border-color: var(--color-rule-strong);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+/* Badges */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  background: var(--color-paper-3);
+  color: var(--color-ink-2);
+  border: 1px solid var(--color-rule);
+}
+.b-blue { background: var(--color-accent-subtle); color: var(--color-accent); border-color: var(--color-accent-border); }
+.b-green { background: var(--color-success-subtle); color: var(--color-success); border-color: var(--color-success-border); }
+.b-amber { background: var(--color-warning-subtle); color: var(--color-warning); border-color: var(--color-warning-border); }
+.b-red { background: var(--color-danger-subtle); color: var(--color-danger); border-color: var(--color-danger-border); }
+
+/* Right Monitor / Code Playground Terminal */
+.code-terminal {
+  background: #0f172a;
+  border: 1px solid #1e293b;
+  border-radius: var(--radius-md);
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  padding: 14px 16px;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  position: relative;
+}
+.code-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--color-rule);
+  color: var(--color-ink-2);
+  font-size: 11px;
+}
+
+/* Tables */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid var(--color-rule);
+  border-radius: var(--radius-md);
+  background: #ffffff;
+}
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: left;
+}
+th {
+  background: var(--color-paper-3);
+  padding: 10px 14px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--color-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-family: var(--font-mono);
+  border-bottom: 1px solid var(--color-rule);
+}
+td {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--color-rule-subtle);
+  color: var(--color-ink-1);
+}
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--color-paper-hover); }
+
+/* Dialogs & Masks */
+.dialog, .mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+  backdrop-filter: blur(6px);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+  animation: fadeIn 0.15s ease-out;
+}
+.dialog .box, .mask .box {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  width: 480px;
+  max-width: 92vw;
+  max-height: 88vh;
+  overflow: auto;
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-lg);
+  animation: scaleIn 0.2s var(--ease-spring);
+  margin: auto;
+}
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+@keyframes scaleIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+
+/* Command Palette Dialog */
+.cmd-palette-box {
+  background: #ffffff;
+  border-radius: var(--radius-lg);
+  width: 580px;
+  max-width: 94vw;
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  animation: scaleIn 0.2s var(--ease-spring);
+}
+.cmd-palette-input {
+  width: 100%;
+  padding: 16px 20px;
+  border: none;
+  border-bottom: 1px solid var(--color-rule);
+  font-family: var(--font-display);
+  font-size: 15px;
+  color: var(--color-ink-1);
+  outline: none;
+  background: #ffffff;
+}
+.cmd-palette-list {
+  max-height: 380px;
+  overflow-y: auto;
+  padding: 10px;
+}
+.cmd-group-title {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--color-ink-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 8px 10px 4px;
+}
+.cmd-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  color: var(--color-ink-1);
+  font-size: 13.5px;
+  font-weight: 500;
+  transition: all 0.12s ease;
+}
+.cmd-item:hover, .cmd-item.selected {
+  background: var(--color-accent-subtle);
+  color: var(--color-accent);
+}
+
+/* Micro-Toasts */
+.toast-container {
+  position: fixed;
+  top: 20px;
+  right: 24px;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  pointer-events: none;
+}
+.toast {
+  pointer-events: auto;
+  background: #ffffff;
+  color: var(--color-ink-1);
+  border: 1px solid var(--color-rule);
+  box-shadow: var(--shadow-md);
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transform: translateY(-16px) scale(0.96);
+  opacity: 0;
+  transition: transform 0.22s var(--ease-spring), opacity 0.22s var(--ease-spring);
+}
+.toast.toast-show { transform: translateY(0) scale(1); opacity: 1; }
+.toast.toast-hide { transform: translateY(-10px) scale(0.96); opacity: 0; }
+
+.spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(0, 0, 0, 0.1);
+  border-top-color: var(--color-accent);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<!-- Hallmark Instrument Header -->
+<header>
+  <div class="brand-wrap">
+    <div class="brand-icon">D</div>
+    <div>
+      <div class="brand-title">
+        Dola Render Gateway
+        <span class="brand-version">v0.4.0</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Command Palette Trigger Button -->
+  <button class="cmd-k-trigger" onclick="openCommandPalette()">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+    <span>Tìm lệnh hoặc điều hướng...</span>
+    <span class="kbd-shortcut">Ctrl K</span>
+  </button>
+
+  <div class="header-right">
+    <div class="live-indicator">
+      <span class="live-pulse-dot"></span>
+      <span id="poolStatusText">POOL READY</span>
+    </div>
+    <div class="live-indicator" title="Cấu hình DOLA_PROXY trong file .env.local">
+      <span style="color:var(--color-ink-3);font-size:10.5px">PROXY:</span>
+      <span id="proxyStatusText" style="font-family:var(--font-mono)">Direct</span>
+    </div>
+    
+    <button class="btn" onclick="openDonateModal()" style="color:#b45309;border-color:#fde68a;background:#fffbeb;font-weight:600">
+      ☕ Ủng hộ tác giả
+    </button>
+    <button class="btn" onclick="refresh()" title="Làm mới dữ liệu">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+    </button>
+    <button class="btn" onclick="logout()" title="Đăng xuất">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+    </button>
+  </div>
+</header>
+
+<!-- Hallmark Numbered Navigation Rail -->
+<div class="nav-rail">
+  <button class="nav-item active" data-tab="create" onclick="switchTab('create')">
+    <span class="nav-num">01</span> Studio Video
+  </button>
+  <button class="nav-item" data-tab="unwatermark" onclick="switchTab('unwatermark')">
+    <span class="nav-num">02</span> Tách Watermark
+  </button>
+  <button class="nav-item" data-tab="dash" onclick="switchTab('dash')">
+    <span class="nav-num">03</span> Thống Kê Pool
+  </button>
+  <button class="nav-item" data-tab="accounts" onclick="switchTab('accounts')">
+    <span class="nav-num">04</span> Tài Khoản Dola
+  </button>
+  <button class="nav-item" data-tab="tasks" onclick="switchTab('tasks')">
+    <span class="nav-num">05</span> Hàng Đợi Tác Vụ
+  </button>
+  <button class="nav-item" data-tab="keys" onclick="switchTab('keys')">
+    <span class="nav-num">06</span> API Keys
+  </button>
+</div>
+
+<main>
+  <!-- ================= TAB 1: 05 · WORKBENCH (STUDIO) ================= -->
+  <section id="tab-create">
+    <div id="noAccWarn" style="display:none;background:#fffbeb;border:1px solid #fde68a;border-radius:var(--radius-sm);padding:12px 16px;font-size:13px;color:#92400e;margin-bottom:16px">
+      ⚠️ <b>Chưa có tài khoản Dola nào trong pool!</b> Vui lòng chuyển sang tab <b>"Tài Khoản Dola"</b> để thêm Profile Cookie JSON.
+    </div>
+
+    <!-- Hallmark Asymmetric Workbench Layout -->
+    <div class="workbench-grid">
+      
+      <!-- LEFT WORKBENCH COLUMN: Parameter & Controls Studio -->
+      <div class="wb-panel">
+        <div class="wb-header">
+          <div>
+            <div class="mono-eyebrow">Interactive Studio</div>
+            <div class="wb-title">Khởi Tạo Video ByteDance Seedance</div>
+          </div>
+          <span class="badge b-blue">Seedance Engine</span>
+        </div>
+
+        <!-- Prompt Textarea -->
+        <div class="form-group">
+          <div class="form-label">
+            <span>Mô tả cảnh quay (Prompt) <span style="color:var(--color-danger)">*</span></span>
+            <span id="prompt_char_count" style="font-family:var(--font-mono);font-size:11px;color:var(--color-ink-3)">0 ký tự</span>
+          </div>
+          <textarea id="gen_prompt" class="form-control" style="min-height:108px;resize:vertical" placeholder="Ví dụ: Một chú mèo con màu cam chạy nhảy trên đồng cỏ hoa vàng, ánh nắng hoàng hôn điện ảnh chiếu nghiêng, 4k ultra-detailed, cinematic lighting..." oninput="updatePromptCount();updateApiPayloadPreview()"></textarea>
+          
+          <!-- Preset Prompts -->
+          <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+            <span style="font-size:11px;color:var(--color-ink-3);align-self:center">Mẫu nhanh:</span>
+            <button type="button" class="btn btn-sm" onclick="setPresetPrompt('Cinematic cyberpunk city in rain, neon glowing reflections, wet pavement, high camera pan, 4k 60fps')">Cyberpunk Rain</button>
+            <button type="button" class="btn btn-sm" onclick="setPresetPrompt('Slow-motion drone shot of dramatic misty mountain valley at sunrise, golden rays, breathtaking nature')">Drone Sunrise</button>
+            <button type="button" class="btn btn-sm" onclick="setPresetPrompt('Close-up anime character with flowing hair, gentle breeze, cherry blossoms, Makoto Shinkai aesthetic')">Anime Portrait</button>
+          </div>
+        </div>
+
+        <!-- Model Selector (Segmented Pills) -->
+        <div class="form-group">
+          <div class="form-label"><span>Mô hình Video AI</span></div>
+          <div class="pill-group" id="modelPillGroup">
+            <div class="pill-btn active" data-val="seedance-2.5" onclick="selectModelPill('seedance-2.5')">
+              <span>🌟 Seedance 2.5</span>
+              <span class="pill-meta">Chuyển động mượt & thông minh</span>
+            </div>
+            <div class="pill-btn" data-val="seedance-2.0" onclick="selectModelPill('seedance-2.0')">
+              <span>⚡ Seedance 2.0</span>
+              <span class="pill-meta">Tốc độ cao & ổn định</span>
+            </div>
+          </div>
+          <input type="hidden" id="gen_model" value="seedance-2.5">
+        </div>
+
+        <!-- Ratio & Duration Grid -->
+        <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:14px" class="form-group">
+          <div>
+            <div class="form-label"><span>Tỷ lệ khung hình</span></div>
+            <select id="gen_ratio" class="form-control" onchange="updateApiPayloadPreview()">
+              <option value="16:9" selected>16:9 (Video Ngang — YouTube / PC)</option>
+              <option value="9:16">9:16 (Video Dọc — TikTok / Reels / Shorts)</option>
+              <option value="1:1">1:1 (Hình vuông — Feed)</option>
+              <option value="4:3">4:3 (Tiêu chuẩn 4:3)</option>
+              <option value="3:4">3:4 (Khung dọc 3:4)</option>
+            </select>
+          </div>
+
+          <div>
+            <div class="form-label"><span>Thời lượng</span></div>
+            <select id="gen_duration" class="form-control" onchange="updateApiPayloadPreview()">
+              <option value="10" selected>10 giây (Tiêu chuẩn)</option>
+              <option value="15">15 giây (Mở rộng)</option>
+              <option value="30">30 giây (Mở rộng)</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Reference Images Section -->
+        <div class="form-group">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
+            <div class="form-label" style="margin-bottom:0"><span>Ảnh tham chiếu (Reference Images — Multi-image)</span></div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span id="ref_img_count" class="badge" style="font-size:11px;font-weight:600">0 / 30 ảnh</span>
+              <button id="ref_clear_all_btn" type="button" class="btn btn-sm" onclick="clearAllRefImages()" style="display:none;padding:2px 8px;font-size:11px;color:var(--color-danger)">
+                Xóa tất cả
+              </button>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px">
+            <input id="gen_ref_input" class="form-control" placeholder="Dán URL ảnh (https://...jpg, png, webp) rồi nhấn Thêm hoặc Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();addRefImage()}">
+            <button type="button" class="btn btn-p" onclick="addRefImage()" style="white-space:nowrap;padding:0 16px;gap:6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Thêm ảnh
+            </button>
+            <button type="button" class="btn" onclick="openMultiRefModal()" title="Dán danh sách nhiều URL cùng lúc" style="white-space:nowrap;padding:0 14px;gap:6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+              Dán nhiều link
+            </button>
+          </div>
+
+          <!-- Reference Images Grid Display -->
+          <div id="ref_images_container" style="display:none;margin-top:12px;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px"></div>
+          
+          <div style="margin-top:7px;font-size:12px;color:var(--color-ink-3);line-height:1.5">
+            💡 <b>Gợi ý:</b> ByteDance Seedance cho phép cung cấp nhiều ảnh tham chiếu để giữ tạo hình nhân vật, góc máy hoặc phong cách nhất quán. Tối đa <b>30 ảnh</b> (mỗi ảnh ≤ 15MB).
+          </div>
+        </div>
+
+        <!-- Primary Trigger Action -->
+        <div style="margin-top:22px;display:flex;align-items:center;gap:14px">
+          <button id="btn_submit_gen" class="btn btn-p" style="padding:10px 26px;font-size:14px;font-weight:600" onclick="submitGenerateVideo()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"></polygon></svg>
+            Khởi Tạo Render Video
+          </button>
+          <span id="gen_msg" style="color:var(--color-ink-3);font-size:12px;font-family:var(--font-mono)"></span>
+        </div>
+      </div>
+
+      <!-- RIGHT WORKBENCH COLUMN: Live Output Monitor & API Playground -->
+      <div style="display:flex;flex-direction:column;gap:18px">
+        
+        <!-- Live Video Monitor Panel -->
+        <div class="wb-panel">
+          <div class="wb-header">
+            <div>
+              <div class="mono-eyebrow">Monitor & Player</div>
+              <div class="wb-title">Trạng Thái Render Trực Tiếp</div>
+            </div>
+            <span id="gen_status_badge" class="badge">Idle</span>
+          </div>
+
+          <div id="gen_status_box" style="min-height:56px;display:flex;align-items:center;padding:14px 16px;background:var(--color-paper-3);border:1px solid var(--color-rule);border-radius:var(--radius-md);font-size:13.5px">
+            <span class="spinner" id="gen_spinner" style="display:none;margin-right:8px"></span>
+            <span id="gen_status_text">Hệ thống sẵn sàng. Điền Prompt bên trái và bấm Khởi Tạo để bắt đầu render.</span>
+          </div>
+
+          <div id="gen_video_container" style="display:none;margin-top:16px">
+            <video id="gen_video_player" controls autoplay style="width:100%;max-height:420px;border-radius:var(--radius-md);background:#000;display:block"></video>
+            <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap">
+              <a id="gen_download_btn" class="btn btn-p" href="#" download target="_blank">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="0"></line></svg>
+                Tải MP4 Không Watermark
+              </a>
+              <button class="btn" onclick="copyGenUrl()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                Sao chép liên kết video
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Real-time API Payload & cURL Developer Card -->
+        <div class="wb-panel" style="padding:18px">
+          <div class="code-bar">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--color-accent)"></span>
+              <span style="font-weight:700;color:var(--color-ink-1);font-size:12.5px;letter-spacing:-0.01em">API PAYLOAD</span>
+              <span style="font-family:var(--font-mono);font-size:11px;font-weight:600;background:var(--color-paper-3);border:1px solid var(--color-rule-strong);color:var(--color-ink-2);padding:2px 7px;border-radius:4px">POST /v1/videos/generations</span>
+            </div>
+            <button class="btn btn-sm" onclick="copyCurlSnippet()" style="font-family:var(--font-mono);font-size:11px;padding:3px 10px;gap:5px">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+              Copy cURL
+            </button>
+          </div>
+          <pre id="api_payload_preview" class="code-terminal" style="padding:10px 12px;font-size:11.5px;max-height:220px"></pre>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TAB 2: UNWATERMARKED EXTRACTOR ================= -->
+  <section id="tab-unwatermark" style="display:none">
+    <div class="wb-panel" style="max-width:880px;margin:0 auto">
+      <div class="wb-header">
+        <div>
+          <div class="mono-eyebrow">Master Stream Decoder</div>
+          <div class="wb-title">Trích Xuất Video Gốc Không Watermark</div>
+        </div>
+        <span class="badge b-green">lr=unwatermarked</span>
+      </div>
+      <p style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:18px">
+        Dán đường dẫn chat hoặc mã Conversation ID từ Dola. Hệ thống sẽ truy vấn trực tiếp luồng master 1080P gốc không chứa logo và tải về thư mục downloads của bạn.
+      </p>
+
+      <div class="form-group">
+        <div class="form-label"><span>Link hội thoại Dola hoặc Conversation ID</span></div>
+        <div style="display:flex;gap:10px">
+          <input id="clean_input" class="form-control" placeholder="Ví dụ: https://www.dola.com/chat/38417930345701393 hoặc 38417930345701393" onkeydown="if(event.key==='Enter')submitExtractClean()">
+          <button id="btn_clean_submit" class="btn btn-p" style="white-space:nowrap;padding:0 22px;font-weight:600" onclick="submitExtractClean()">
+            Tải Không Logo
+          </button>
+        </div>
+        <div style="margin-top:8px;font-size:12px;color:var(--color-ink-3)">
+          💡 Video mẫu kiểm tra: <a href="javascript:void(0)" onclick="q('#clean_input').value='38417930345701393';submitExtractClean()" style="text-decoration:underline">Thử ngay ID: 38417930345701393</a>
+        </div>
+      </div>
+
+      <div id="clean_result_box" style="display:none;margin-top:20px;padding:16px;background:var(--color-paper-3);border:1px solid var(--color-rule);border-radius:var(--radius-md)">
+        <div id="clean_msg"></div>
+        <div id="clean_video_wrap" style="display:none;margin-top:14px">
+          <video id="clean_video_player" controls style="width:100%;max-height:460px;border-radius:var(--radius-md);background:#000;display:block"></video>
+          <div style="margin-top:12px;display:flex;gap:10px">
+            <a id="clean_download_btn" class="btn btn-p" href="#" download target="_blank">📥 Tải MP4 Ngay</a>
+            <button class="btn" onclick="copy(currentVideoUrl);toast('Đã sao chép link video!','success')">📋 Sao chép Link</button>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:28px">
+        <div class="form-label"><span>Video Đã Tải Về Trong Thư Mục downloads/</span></div>
+        <div id="downloadsTable" class="table-wrap"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= TAB 3: DASHBOARD STATS ================= -->
+  <section id="tab-dash" style="display:none">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(220px, 1fr));gap:16px;margin-bottom:24px">
+      <div class="wb-panel" style="padding:16px">
+        <div class="mono-eyebrow">TỔNG TÁC VỤ</div>
+        <div id="st_total_tasks" style="font-family:var(--font-display);font-size:28px;font-weight:700">0</div>
+        <div id="st_total_subtext" style="font-size:12px;color:var(--color-ink-3);margin-top:4px">Đã ghi nhận trong cơ sở dữ liệu</div>
+      </div>
+      <div class="wb-panel" style="padding:16px">
+        <div class="mono-eyebrow">THÀNH CÔNG</div>
+        <div id="st_completed_tasks" style="font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--color-success)">0</div>
+        <div id="st_completed_subtext" style="font-size:12px;color:var(--color-ink-3);margin-top:4px">Hoàn tất kết xuất video 1080P</div>
+      </div>
+      <div class="wb-panel" style="padding:16px">
+        <div class="mono-eyebrow">TỈ LỆ THÀNH CÔNG</div>
+        <div id="st_success_rate" style="font-family:var(--font-display);font-size:28px;font-weight:700;color:var(--color-accent)">0%</div>
+        <div id="st_rate_subtext" style="font-size:12px;color:var(--color-ink-3);margin-top:4px">Độ tin cậy xử lý pool</div>
+      </div>
+      <div class="wb-panel" style="padding:16px">
+        <div class="mono-eyebrow">TÀI KHOẢN POOL</div>
+        <div id="st_accounts" style="font-family:var(--font-display);font-size:28px;font-weight:700">0</div>
+        <div style="font-size:12px;color:var(--color-ink-3);margin-top:4px"><span id="st_active_accounts">0</span> khả dụng / <span id="st_busy_accounts">0</span> đang bận</div>
+      </div>
+    </div>
+
+    <div class="wb-panel">
+      <div class="wb-header">
+        <div>
+          <div class="mono-eyebrow">Thống Kê 7 Ngày Gần Nhất</div>
+          <div class="wb-title">Biểu Đồ Sản Lượng Video</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:14px;font-size:12px;font-family:var(--font-mono)">
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="display:inline-block;width:10px;height:10px;background:#16a34a;border-radius:2px"></span>
+            <span>Thành công</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="display:inline-block;width:10px;height:10px;background:#cbd5e1;border-radius:2px"></span>
+            <span>Thất bại</span>
+          </div>
+        </div>
+      </div>
+      <div id="trendChart" style="display:flex;align-items:flex-end;gap:18px;height:170px;padding:14px 4px 4px"></div>
+    </div>
+  </section>
+
+  <!-- ================= TAB 4: ACCOUNTS ================= -->
+  <section id="tab-accounts" style="display:none">
+    <div class="wb-panel">
+      <div class="wb-header">
+        <div>
+          <div class="mono-eyebrow">Account Pool Manager</div>
+          <div class="wb-title">Danh Sách Tài Khoản Dola</div>
+        </div>
+        <div style="display:flex;gap:10px">
+          <button class="btn" onclick="openLoginAcc()">Đăng Nhập Google (Headful)</button>
+          <button class="btn btn-p" onclick="openAddAcc()">＋ Thêm Cookie JSON</button>
+        </div>
+      </div>
+
+      <!-- Proxy Information Card -->
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--color-paper-3);border:1px solid var(--color-rule);border-radius:var(--radius-md);display:flex;align-items:center;justify-content:space-between;gap:14px">
+        <div>
+          <div style="font-family:var(--font-display);font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:8px">
+            <span>🌐 Egress Proxy Hiện Tại:</span>
+            <code id="accProxyDisplay" style="font-family:var(--font-mono);font-size:13px;color:var(--color-accent)">Direct / None</code>
+          </div>
+          <div style="font-size:12px;color:var(--color-ink-3);margin-top:3px;line-height:1.5">
+            Dola (ByteDance) yêu cầu IP mạng thuộc vùng <b>Nhật Bản (JP)</b> hoặc <b>Hàn Quốc (KR)</b>. Để bổ sung hoặc đổi proxy, mở file <code>.env.local</code> và sửa dòng <code>DOLA_PROXY=http://127.0.0.1:7890</code>.
+          </div>
+        </div>
+        <button class="btn btn-sm" onclick="promptProxyHelp()" style="white-space:nowrap">📋 Hướng Dẫn Proxy</button>
+      </div>
+
+      <div id="accountsTable" class="table-wrap"></div>
+    </div>
+  </section>
+
+  <!-- ================= TAB 5: TASKS ================= -->
+  <section id="tab-tasks" style="display:none">
+    <div class="wb-panel">
+      <div class="wb-header">
+        <div>
+          <div class="mono-eyebrow">Queue & History</div>
+          <div class="wb-title">Hàng Đợi & Lịch Sử Tác Vụ</div>
+        </div>
+        <button class="btn" onclick="loadTasks()">Làm Mới</button>
+      </div>
+      <div id="tasksTable" class="table-wrap"></div>
+    </div>
+  </section>
+
+  <!-- ================= TAB 6: API KEYS ================= -->
+  <section id="tab-keys" style="display:none">
+    <div class="wb-panel">
+      <div class="wb-header">
+        <div>
+          <div class="mono-eyebrow">Authentication</div>
+          <div class="wb-title">Quản Lý API Keys Cho Client</div>
+        </div>
+        <button class="btn btn-p" onclick="openCreateKey()">＋ Tạo API Key Mới</button>
+      </div>
+      <div id="keysTable" class="table-wrap"></div>
+    </div>
+  </section>
+</main>
+
+<!-- Hallmark ⌘K Command Palette Dialog Overlay -->
+<div id="cmdPaletteModal" class="dialog" onclick="if(event.target===this)closeCommandPalette()">
+  <div class="cmd-palette-box">
+    <input id="cmdPaletteInput" class="cmd-palette-input" placeholder="Gõ lệnh hoặc điều hướng..." oninput="filterCommandPalette()" onkeydown="handleCmdKey(event)">
+    <div id="cmdPaletteList" class="cmd-palette-list">
+      <div class="cmd-group-title">ĐIỀU HƯỚNG NHANH</div>
+      <div class="cmd-item" onclick="execCmd(()=>switchTab('create'))"><span>🎬 Chuyển sang Studio Video AI</span><span class="kbd-shortcut">1</span></div>
+      <div class="cmd-item" onclick="execCmd(()=>switchTab('unwatermark'))"><span>⚡ Chuyển sang Tách Video Không Watermark</span><span class="kbd-shortcut">2</span></div>
+      <div class="cmd-item" onclick="execCmd(()=>switchTab('dash'))"><span>📊 Chuyển sang Thống Kê Pool</span><span class="kbd-shortcut">3</span></div>
+      <div class="cmd-item" onclick="execCmd(()=>switchTab('accounts'))"><span>👥 Quản lý Tài Khoản Dola</span><span class="kbd-shortcut">4</span></div>
+      <div class="cmd-item" onclick="execCmd(()=>switchTab('tasks'))"><span>⏳ Xem Hàng Đợi & Lịch Sử Tác Vụ</span><span class="kbd-shortcut">5</span></div>
+      <div class="cmd-item" onclick="execCmd(()=>switchTab('keys'))"><span>🔑 Quản lý API Keys</span><span class="kbd-shortcut">6</span></div>
+      
+      <div class="cmd-group-title" style="margin-top:8px">TÁC VỤ & HỖ TRỢ</div>
+      <div class="cmd-item" onclick="execCmd(openDonateModal)"><span>☕ Ủng Hộ Tác Giả (QR Vietcombank)</span></div>
+      <div class="cmd-item" onclick="execCmd(openProxyModal)"><span>🌐 Hướng Dẫn Cấu Hình Proxy (.env.local)</span></div>
+      <div class="cmd-item" onclick="execCmd(copyCurlSnippet)"><span>📋 Sao chép cURL mẫu cho lập trình viên</span></div>
+      <div class="cmd-item" onclick="execCmd(refresh)"><span>🔄 Làm mới toàn bộ dữ liệu</span><span class="kbd-shortcut">R</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- Support / Donate Modal (VietQR Vietcombank) -->
+<div id="donateModal" class="dialog" onclick="if(event.target===this)closeDonateModal()">
+  <div class="box" style="width:460px;text-align:center">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px">☕ Ủng Hộ Tác Giả</h2>
+      <button class="btn btn-sm" onclick="closeDonateModal()">✕</button>
+    </div>
+    <p style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:16px;text-align:left">
+      Dola Studio là dự án mã nguồn mở hoàn toàn miễn phí. Nếu công cụ hữu ích cho công việc của bạn, hãy gửi một ly cà phê ủng hộ tác giả duy trì & phát triển thêm các tính năng mới nhé!
+    </p>
+
+    <div style="display:flex;justify-content:center;margin-bottom:16px">
+      <div style="padding:8px;background:#ffffff;border:1px solid var(--color-rule);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);display:inline-block">
+        <img src="https://img.vietqr.io/image/vietcombank-0921000724236-compact2.png?amount=&addInfo=Ung%20ho%20Dola%20Studio&accountName=NGUYEN%20THI%20THU%20TRUYEN" alt="VietQR Vietcombank" style="width:230px;height:auto;display:block;border-radius:6px">
+      </div>
+    </div>
+
+    <div style="background:var(--color-paper-3);border:1px solid var(--color-rule);border-radius:var(--radius-md);padding:14px;text-align:left;font-size:13px;margin-bottom:16px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="color:var(--color-ink-2)">Ngân hàng:</span>
+        <span style="font-weight:600">Vietcombank (VCB)</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="color:var(--color-ink-2)">Số tài khoản:</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <code style="font-family:var(--font-mono);font-weight:700;font-size:14px;color:var(--color-accent)">0921000724236</code>
+          <button class="btn btn-sm" onclick="copy('0921000724236');toast('Đã sao chép STK: 0921000724236','success')">Copy</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <span style="color:var(--color-ink-2)">Chủ tài khoản:</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-weight:600;text-transform:uppercase">NGUYEN THI THU TRUYEN</span>
+          <button class="btn btn-sm" onclick="copy('NGUYEN THI THU TRUYEN');toast('Đã sao chép tên chủ tài khoản','success')">Copy</button>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <span style="color:var(--color-ink-2)">Nội dung chuyển:</span>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-style:italic">Ung ho Dola Studio</span>
+          <button class="btn btn-sm" onclick="copy('Ung ho Dola Studio');toast('Đã sao chép nội dung chuyển khoản','success')">Copy</button>
+        </div>
+      </div>
+    </div>
+
+    <button class="btn btn-p" style="width:100%" onclick="closeDonateModal()">Cảm Ơn Sự Ủng Hộ Của Bạn! ❤️</button>
+  </div>
+</div>
+
+<!-- Bulk Reference Image URL Modal -->
+<div id="multiRefModal" class="dialog" onclick="if(event.target===this)closeMultiRefModal()">
+  <div class="box" style="width:520px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px">Dán Danh Sách Ảnh Tham Chiếu</h2>
+      <button class="btn btn-sm" onclick="closeMultiRefModal()">✕</button>
+    </div>
+    <p style="color:var(--color-ink-2);font-size:13px;line-height:1.5;margin-bottom:12px">
+      Dán danh sách các URL ảnh công khai, mỗi URL trên một dòng:
+    </p>
+    <textarea id="bulk_ref_textarea" class="form-control" style="min-height:160px;font-family:var(--font-mono);font-size:12.5px" placeholder="https://domain.com/photo1.jpg&#10;https://domain.com/photo2.png&#10;https://domain.com/photo3.webp"></textarea>
+    <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn" onclick="closeMultiRefModal()">Hủy</button>
+      <button class="btn btn-p" onclick="submitBulkRefUrls()">Thêm Vào Danh Sách</button>
+    </div>
+  </div>
+</div>
+
+<!-- Proxy Configuration Modal -->
+<div id="proxyModal" class="dialog" onclick="if(event.target===this)closeProxyModal()">
+  <div class="box" style="width:560px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px">🌐 Cấu Hình Egress Proxy Cho Dola</h2>
+      <button class="btn btn-sm" onclick="closeProxyModal()">✕</button>
+    </div>
+    <div style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:16px">
+      <p style="margin-bottom:10px">
+        Dola (ByteDance) yêu cầu IP mạng thuộc khu vực <b>Nhật Bản (JP)</b> hoặc <b>Hàn Quốc (KR)</b>. Nếu server chạy tại Việt Nam hoặc các quốc gia khác mà không qua proxy, request tới Dola sẽ bị từ chối kết nối hoặc yêu cầu captcha.
+      </p>
+      
+      <div style="background:var(--color-paper-3);border:1px solid var(--color-rule);border-radius:var(--radius-md);padding:12px;margin-bottom:14px">
+        <div style="font-weight:600;font-size:12px;color:var(--color-ink-1);margin-bottom:6px">Cách cấu hình trong file <code>.env.local</code>:</div>
+        <pre style="margin:0;padding:8px 10px;background:#ffffff;border:1px solid var(--color-rule);border-radius:4px;font-family:var(--font-mono);font-size:12px;overflow-x:auto;color:#0f172a"># Proxy HTTP (VD: Clash, v2ray, vmess local port)
+DOLA_PROXY=http://127.0.0.1:7890
+
+# Hoặc SOCKS5 Proxy
+# DOLA_PROXY=socks5://127.0.0.1:10808
+
+# Proxy có user/password:
+# DOLA_PROXY=http://username:password@proxy-ip:port</pre>
+      </div>
+
+      <div style="background:#eff6ff;border:1px solid #bfdbfe;border-radius:var(--radius-md);padding:10px 12px;color:#1e40af;font-size:12.5px">
+        💡 <b>Mẹo:</b> Nếu bạn bật VPN toàn hệ thống (Tun Mode hoặc System Proxy) trên máy tính chọn vị trí Japan / Korea, bạn có thể để trống <code>DOLA_PROXY=</code> trong file <code>.env.local</code>.
+      </div>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px">
+      <button class="btn btn-p" onclick="closeProxyModal()">Đã Hiểu</button>
+    </div>
+  </div>
+</div>
+
+<!-- Generic Form Dialog -->
+<div id="dlg" class="dialog" onclick="if(event.target===this)hide('dlg')"><div class="box" id="dlgBox"></div></div>
+
+<!-- Fullscreen Video Preview Dialog -->
+<div id="videoModal" class="dialog" onclick="if(event.target===this)closeVideo()">
+  <div class="box" style="width:680px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0">Xem Video</h2>
+      <button class="btn btn-sm" onclick="closeVideo()">✕</button>
+    </div>
+    <video id="videoEl" controls autoplay style="width:100%;border-radius:var(--radius-md);background:#000;display:block"></video>
+    <div style="margin-top:14px;display:flex;justify-content:flex-end">
+      <button class="btn" onclick="closeVideo()">Đóng</button>
+    </div>
+  </div>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
+
+<!-- ================= JAVASCRIPT ================= -->
+<script>
+const LS_KEY = 'dola_admin_key';
+let adminKey = localStorage.getItem(LS_KEY) || '';
+let autoRefresh = true, curTab = 'create', timer = null;
+let activePollTimer = null, currentVideoUrl = '';
+let referenceImagesList = [];
+
+function q(s) { return document.querySelector(s); }
+
+function show(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  if (el.classList.contains('dialog') || el.classList.contains('mask')) {
+    el.style.display = 'flex';
+  } else {
+    el.style.display = 'block';
+  }
+}
+
+function hide(id) {
+  const el = document.getElementById(id);
+  if (el) el.style.display = 'none';
+}
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+function fmt(ts) {
+  if (!ts) return '—';
+  const d = new Date(ts * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
+
+function toast(msg, type = 'info') {
+  const container = q('#toastContainer');
+  if (!container) return;
+  const t = document.createElement('div');
+  t.className = 'toast toast-' + type;
+  let icon = 'ℹ';
+  if (type === 'success') icon = '✓';
+  if (type === 'error') icon = '✕';
+  t.innerHTML = `<span style="font-weight:700;color:var(--color-accent)">${icon}</span><span>${esc(msg)}</span>`;
+  container.appendChild(t);
+  setTimeout(() => t.classList.add('toast-show'), 10);
+  setTimeout(() => {
+    t.classList.remove('toast-show');
+    t.classList.add('toast-hide');
+    setTimeout(() => t.remove(), 250);
+  }, 3200);
+}
+
+function copy(text) {
+  navigator.clipboard.writeText(text).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    ta.remove();
+  });
+}
+
+/* API Fetch Wrapper */
+async function api(path, opt = {}) {
+  const h = Object.assign({}, opt.headers || {});
+  if (adminKey) h['X-Admin-Key'] = adminKey;
+  if (opt.body && !h['Content-Type']) h['Content-Type'] = 'application/json';
+  
+  const res = await fetch(path, { credentials: 'omit', ...opt, headers: h });
+  if (res.status === 401) {
+    promptAdminKey();
+    throw new Error('Cần nhập mã X-Admin-Key');
+  }
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(err.detail || JSON.stringify(err));
+  }
+  return res.json();
+}
+
+function promptAdminKey() {
+  const key = prompt('Nhập X-Admin-Key (để trống nếu server đang bật dev-mode):', adminKey);
+  if (key !== null) {
+    adminKey = key.trim();
+    localStorage.setItem(LS_KEY, adminKey);
+    refresh();
+  }
+}
+
+function logout() {
+  localStorage.removeItem(LS_KEY);
+  adminKey = '';
+  toast('Đã xóa thông tin khóa quản trị.', 'info');
+  setTimeout(refresh, 400);
+}
+
+/* Tab Navigation */
+function switchTab(t) {
+  curTab = t;
+  document.querySelectorAll('main > section').forEach(s => s.style.display = 'none');
+  document.querySelectorAll('.nav-item').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-tab') === t);
+  });
+  
+  const target = q('#tab-' + t);
+  if (target) target.style.display = 'block';
+  
+  if (t === 'dash') loadDash();
+  if (t === 'accounts') loadAccounts();
+  if (t === 'tasks') loadTasks();
+  if (t === 'keys') loadKeys();
+  if (t === 'unwatermark') loadDownloads();
+  if (t === 'create') {
+    checkAccountWarning();
+    updateApiPayloadPreview();
+  }
+}
+
+/* ---- Hallmark 05 · Workbench Studio Logic ---- */
+function selectModelPill(modelVal) {
+  q('#gen_model').value = modelVal;
+  document.querySelectorAll('#modelPillGroup .pill-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.getAttribute('data-val') === modelVal);
+  });
+  updateApiPayloadPreview();
+}
+
+function setPresetPrompt(p) {
+  q('#gen_prompt').value = p;
+  updatePromptCount();
+  updateApiPayloadPreview();
+}
+
+function updatePromptCount() {
+  const val = q('#gen_prompt').value;
+  q('#prompt_char_count').textContent = `${val.length} ký tự`;
+}
+
+function updateApiPayloadPreview() {
+  const p = q('#gen_prompt').value;
+  const m = q('#gen_model').value;
+  const r = q('#gen_ratio').value;
+  const d = parseInt(q('#gen_duration').value);
+  const pendingInput = q('#gen_ref_input') ? q('#gen_ref_input').value.trim() : '';
+  let refs = [...referenceImagesList];
+  if (pendingInput && (pendingInput.startsWith('http://') || pendingInput.startsWith('https://')) && !refs.includes(pendingInput)) {
+    refs.push(pendingInput);
+  }
+
+  const payload = {
+    model: m,
+    prompt: p || "A cinematic shot of a futuristic cyberpunk skyline...",
+    ratio: r,
+    duration: d,
+    reference_images: refs
+  };
+
+  const el = q('#api_payload_preview');
+  if (el) el.textContent = JSON.stringify(payload, null, 2);
+}
+
+function copyCurlSnippet() {
+  const p = q('#gen_prompt').value || "A cinematic shot...";
+  const m = q('#gen_model').value;
+  const r = q('#gen_ratio').value;
+  const d = parseInt(q('#gen_duration').value);
+  const curl = `curl -X POST http://127.0.0.1:8000/v1/videos/generations \\
+  -H "Content-Type: application/json" \\
+  -d '${JSON.stringify({ model: m, prompt: p, ratio: r, duration: d, reference_images: referenceImagesList })}'`;
+  copy(curl);
+  toast('Đã sao chép cURL snippet vào clipboard!', 'success');
+}
+
+/* Reference Images Multi-Selector */
+function renderRefImages() {
+  const container = q('#ref_images_container');
+  const countEl = q('#ref_img_count');
+  const clearBtn = q('#ref_clear_all_btn');
+  if (!container || !countEl) return;
+
+  countEl.textContent = `${referenceImagesList.length} / 30 ảnh`;
+  if (referenceImagesList.length > 0) {
+    container.style.display = 'grid';
+    if (clearBtn) clearBtn.style.display = 'inline-block';
+    countEl.classList.add('b-blue');
+  } else {
+    container.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
+    countEl.classList.remove('b-blue');
+  }
+
+  container.innerHTML = referenceImagesList.map((url, idx) => {
+    let domain = 'image';
+    try { domain = new URL(url).hostname; } catch(e) {}
+    return `
+      <div class="ref-thumb-card">
+        <img src="${esc(url)}" alt="Ref ${idx+1}" onerror="this.style.display='none';const fb=this.parentElement.querySelector('.ref-fallback-icon');if(fb)fb.style.display='flex';" style="width:38px;height:38px;border-radius:6px;object-fit:cover;border:1px solid var(--color-rule);flex-shrink:0;background:var(--color-paper-3)">
+        <div class="ref-fallback-icon" style="display:none;width:38px;height:38px;border-radius:6px;border:1px solid var(--color-rule);background:var(--color-paper-3);align-items:center;justify-content:center;color:var(--color-ink-3);font-size:10px;font-weight:600;flex-shrink:0">IMG</div>
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
+            <span class="badge" style="padding:1px 5px;font-size:10px;line-height:1.2">#${idx + 1}</span>
+            <span style="font-size:11px;color:var(--color-ink-3);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(domain)}</span>
+          </div>
+          <div style="font-size:11.5px;font-family:var(--font-mono);color:var(--color-ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(url)}">${esc(url)}</div>
+        </div>
+        <button type="button" class="btn btn-sm" style="padding:2px 6px;border-color:transparent;color:var(--color-danger)" onclick="removeRefImage(${idx})" title="Xóa ảnh">✕</button>
+      </div>
+    `;
+  }).join('');
+  updateApiPayloadPreview();
+}
+
+function addRefImage() {
+  const input = q('#gen_ref_input');
+  if (!input) return;
+  const val = input.value.trim();
+  if (!val) return;
+  if (!val.startsWith('http://') && !val.startsWith('https://')) {
+    return toast('Vui lòng nhập đường dẫn URL hợp lệ (http:// hoặc https://)', 'error');
+  }
+  if (referenceImagesList.length >= 30) {
+    return toast('Đã đạt giới hạn tối đa 30 ảnh tham chiếu!', 'error');
+  }
+  if (referenceImagesList.includes(val)) {
+    return toast('Ảnh này đã có trong danh sách tham chiếu!', 'info');
+  }
+  referenceImagesList.push(val);
+  input.value = '';
+  renderRefImages();
+  toast(`Đã thêm ảnh tham chiếu #${referenceImagesList.length}`, 'success');
+}
+
+function removeRefImage(idx) {
+  if (idx >= 0 && idx < referenceImagesList.length) {
+    referenceImagesList.splice(idx, 1);
+    renderRefImages();
+  }
+}
+
+function clearAllRefImages() {
+  if (confirm('Bạn có chắc muốn xóa tất cả ảnh tham chiếu?')) {
+    referenceImagesList = [];
+    renderRefImages();
+    toast('Đã làm trống danh sách ảnh tham chiếu', 'info');
+  }
+}
+
+function openMultiRefModal() {
+  show('multiRefModal');
+  const txt = q('#bulk_ref_textarea');
+  if (txt) { txt.value = ''; setTimeout(() => txt.focus(), 50); }
+}
+function closeMultiRefModal() { hide('multiRefModal'); }
+
+function submitBulkRefUrls() {
+  const txt = q('#bulk_ref_textarea');
+  if (!txt) return;
+  const lines = txt.value.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length === 0) return toast('Vui lòng nhập ít nhất một đường dẫn ảnh!', 'error');
+  let added = 0;
+  for (const line of lines) {
+    if ((line.startsWith('http://') || line.startsWith('https://')) && !referenceImagesList.includes(line)) {
+      if (referenceImagesList.length < 30) { referenceImagesList.push(line); added++; }
+    }
+  }
+  closeMultiRefModal();
+  renderRefImages();
+  if (added > 0) toast(`Đã thêm thành công ${added} ảnh tham chiếu!`, 'success');
+}
+
+/* Video Generation Submit & Polling */
+async function checkAccountWarning() {
+  try {
+    const st = await api('/api/admin/stats');
+    const hasAcc = (st.total_accounts || 0) > 0;
+    const warn = q('#noAccWarn');
+    if (warn) warn.style.display = hasAcc ? 'none' : 'block';
+    const statusText = q('#poolStatusText');
+    if (statusText) statusText.textContent = hasAcc ? `${st.total_accounts} ACCOUNTS ONLINE` : 'NO ACCOUNTS';
+    const proxyStatus = q('#proxyStatusText');
+    if (proxyStatus) proxyStatus.textContent = st.proxy ? (st.proxy.length > 24 ? st.proxy.slice(0, 22) + '…' : st.proxy) : 'Direct';
+    const accProxyDisplay = q('#accProxyDisplay');
+    if (accProxyDisplay) accProxyDisplay.textContent = st.proxy || 'Direct / None';
+  } catch (e) {}
+}
+
+async function submitGenerateVideo() {
+  const model = q('#gen_model').value;
+  const prompt = q('#gen_prompt').value.trim();
+  if (!prompt) return toast('Vui lòng nhập mô tả (Prompt) video bạn muốn tạo!', 'error');
+  const ratio = q('#gen_ratio').value;
+  const duration = parseInt(q('#gen_duration').value);
+
+  const pendingInput = q('#gen_ref_input') ? q('#gen_ref_input').value.trim() : '';
+  let finalRefImages = [...referenceImagesList];
+  if (pendingInput && (pendingInput.startsWith('http://') || pendingInput.startsWith('https://'))) {
+    if (!finalRefImages.includes(pendingInput) && finalRefImages.length < 30) {
+      finalRefImages.push(pendingInput);
+    }
+  }
+
+  const body = {
+    model: model,
+    prompt: prompt,
+    ratio: ratio,
+    duration: duration,
+    reference_images: finalRefImages
+  };
+
+  const btn = q('#btn_submit_gen');
+  btn.disabled = true;
+  q('#gen_msg').textContent = 'Đang gửi yêu cầu...';
+  q('#gen_status_badge').className = 'badge b-amber';
+  q('#gen_status_badge').textContent = 'Processing';
+  q('#gen_status_box').style.background = 'var(--color-paper-3)';
+  q('#gen_status_box').style.border = '1px solid var(--color-rule)';
+  q('#gen_spinner').style.display = 'inline-block';
+  q('#gen_status_text').textContent = 'Đang khởi tạo tác vụ (Creating task)...';
+  hide('gen_video_container');
+
+  try {
+    const resp = await fetch('/v1/videos/generations', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.detail || JSON.stringify(data));
+
+    q('#gen_msg').textContent = 'Task ID: ' + data.id;
+    pollVideoTask(data.id);
+  } catch (err) {
+    btn.disabled = false;
+    q('#gen_msg').textContent = '';
+    q('#gen_spinner').style.display = 'none';
+    q('#gen_status_badge').className = 'badge b-red';
+    q('#gen_status_badge').textContent = 'Failed';
+    q('#gen_status_box').style.background = 'var(--color-danger-subtle)';
+    q('#gen_status_box').style.border = '1px solid var(--color-danger-border)';
+    q('#gen_status_text').innerHTML = '<span style="color:var(--color-danger)"><b>Lỗi:</b> ' + esc(err.message) + '</span>';
+  }
+}
+
+function pollVideoTask(taskId) {
+  if (activePollTimer) clearInterval(activePollTimer);
+  let elapsed = 0;
+
+  activePollTimer = setInterval(async () => {
+    elapsed += 3;
+    try {
+      const resp = await fetch(`/v1/videos/${taskId}`);
+      const data = await resp.json();
+
+      if (data.status === 'processing') {
+        q('#gen_status_text').innerHTML = `Đang xử lý render video qua Dola automation... (${elapsed}s)`;
+      } else if (data.status === 'queued') {
+        q('#gen_status_text').innerHTML = `Đang xếp hàng chờ tài khoản khả dụng... (${elapsed}s)`;
+      } else if (data.status === 'completed') {
+        clearInterval(activePollTimer);
+        q('#btn_submit_gen').disabled = false;
+        q('#gen_spinner').style.display = 'none';
+        q('#gen_status_badge').className = 'badge b-green';
+        q('#gen_status_badge').textContent = 'Completed';
+        q('#gen_status_box').style.background = 'var(--color-success-subtle)';
+        q('#gen_status_box').style.border = '1px solid var(--color-success-border)';
+        q('#gen_status_text').innerHTML = `<span style="color:var(--color-success);font-weight:600">✓ Video đã render hoàn tất thành công trong ${elapsed} giây!</span>`;
+
+        currentVideoUrl = data.video_url;
+        const videoEl = q('#gen_video_player');
+        videoEl.src = data.video_url;
+        show('gen_video_container');
+        const dlBtn = q('#gen_download_btn');
+        dlBtn.href = data.video_url;
+        dlBtn.download = `video_${taskId}.mp4`;
+        toast('Render video thành công!', 'success');
+      } else if (data.status === 'failed') {
+        clearInterval(activePollTimer);
+        q('#btn_submit_gen').disabled = false;
+        q('#gen_spinner').style.display = 'none';
+        q('#gen_status_badge').className = 'badge b-red';
+        q('#gen_status_badge').textContent = 'Failed';
+        q('#gen_status_box').style.background = 'var(--color-danger-subtle)';
+        q('#gen_status_box').style.border = '1px solid var(--color-danger-border)';
+        q('#gen_status_text').innerHTML = `<span style="color:var(--color-danger)"><b>Thất bại:</b> ${esc(data.error || 'Quá trình sinh video gặp sự cố')}</span>`;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, 3000);
+}
+
+function copyGenUrl() {
+  if (!currentVideoUrl) return;
+  copy(currentVideoUrl);
+  toast('Đã sao chép liên kết video vào clipboard!', 'success');
+}
+
+/* ---- Unwatermarked Extraction Tab Logic ---- */
+async function submitExtractClean() {
+  const inp = q('#clean_input').value.trim();
+  if (!inp) return toast('Vui lòng nhập link hoặc Conversation ID!', 'error');
+
+  const btn = q('#btn_clean_submit');
+  btn.disabled = true;
+  btn.textContent = 'Đang trích xuất...';
+  show('clean_result_box');
+  q('#clean_msg').innerHTML = '<span class="spinner"></span> Đang kết nối tới Dola CDN và giải mã luồng master 1080P...';
+  hide('clean_video_wrap');
+
+  try {
+    const res = await api('/api/clean-video', {
+      method: 'POST',
+      body: JSON.stringify({ input: inp })
+    });
+
+    btn.disabled = false;
+    btn.textContent = 'Tải Không Logo';
+    q('#clean_msg').innerHTML = `<span style="color:var(--color-success);font-weight:600">✓ Đã trích xuất video gốc thành công!</span>`;
+    currentVideoUrl = res.url;
+    const vEl = q('#clean_video_player');
+    vEl.src = res.url;
+    show('clean_video_wrap');
+    const dlBtn = q('#clean_download_btn');
+    dlBtn.href = res.url;
+    dlBtn.download = res.filename || 'dola_clean_video.mp4';
+    loadDownloads();
+    toast('Trích xuất thành công video không watermark!', 'success');
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = 'Tải Không Logo';
+    q('#clean_msg').innerHTML = `<span style="color:var(--color-danger)"><b>Lỗi trích xuất:</b> ${esc(err.message)}</span>`;
+  }
+}
+
+async function loadDownloads() {
+  try {
+    const res = await api('/api/downloads');
+    const files = res.files || [];
+    const rows = files.map(f => [
+      `<span style="font-weight:600;font-family:var(--font-mono)">${esc(f.name)}</span>`,
+      `${f.size_mb} MB`,
+      fmt(f.modified_at),
+      `<div style="display:flex;gap:6px">
+        <a class="btn btn-sm btn-p" href="${esc(f.url)}" download="${esc(f.name)}" target="_blank">📥 Tải về</a>
+        <button class="btn btn-sm" onclick="playVideo('${esc(f.url)}')">▶ Xem</button>
+        <button class="btn btn-sm" onclick="copy('${window.location.origin}${esc(f.url)}');toast('Đã sao chép liên kết!','success')">📋 Copy</button>
+      </div>`
+    ]);
+    q('#downloadsTable').innerHTML = table(['Tên Video', 'Dung lượng', 'Thời gian tạo', 'Thao tác'], rows);
+  } catch (e) {
+    q('#downloadsTable').innerHTML = '<div style="padding:24px;text-align:center;color:var(--color-ink-3)">Chưa có video nào trong thư mục downloads.</div>';
+  }
+}
+
+/* Dashboard Stats Tab */
+async function loadDash() {
+  try {
+    const st = await api('/api/admin/stats');
+    const allTotal = st.all_time_total !== undefined ? st.all_time_total : (st.total_tasks || 0);
+    const allComp = st.all_time_completed !== undefined ? st.all_time_completed : (st.completed_tasks || 0);
+    const todayTot = st.today_total !== undefined ? st.today_total : ((st.today_completed || 0) + (st.today_failed || 0));
+    const todayComp = st.today_completed || 0;
+
+    q('#st_total_tasks').textContent = allTotal;
+    if (q('#st_total_subtext')) q('#st_total_subtext').textContent = `Hôm nay: ${todayTot} · Toàn thời gian: ${allTotal}`;
+
+    q('#st_completed_tasks').textContent = allComp;
+    if (q('#st_completed_subtext')) q('#st_completed_subtext').textContent = `Hôm nay: ${todayComp} · Toàn thời gian: ${allComp}`;
+
+    let rate = 0;
+    if (st.all_time_success_rate !== undefined && st.all_time_success_rate !== null) {
+      rate = Math.round(st.all_time_success_rate * 100);
+    } else if (allTotal > 0) {
+      rate = Math.round((allComp / allTotal) * 100);
+    }
+    q('#st_success_rate').textContent = rate + '%';
+    if (q('#st_rate_subtext')) q('#st_rate_subtext').textContent = allTotal > 0 ? `${allComp}/${allTotal} tác vụ hoàn tất` : 'Chưa có tác vụ';
+
+    q('#st_accounts').textContent = st.total_accounts || 0;
+    q('#st_active_accounts').textContent = st.available_accounts || 0;
+    q('#st_busy_accounts').textContent = st.busy_accounts || 0;
+
+    const days = st.trend || st.per_day || [];
+    if (days.length > 0) {
+      const maxVal = Math.max(...days.map(d => Math.max(d.total || 0, (d.completed || 0) + (d.failed || 0), 1)));
+      q('#trendChart').innerHTML = days.map(d => {
+        const comp = d.completed || 0;
+        const fail = d.failed || 0;
+        const tot = d.total !== undefined ? d.total : (comp + fail);
+        const hComp = comp > 0 ? Math.max(8, Math.round((comp / maxVal) * 120)) : 0;
+        const hFail = fail > 0 ? Math.max(8, Math.round((fail / maxVal) * 120)) : 0;
+        const dayLabel = d.day || (d.date ? d.date.slice(5) : '');
+
+        return `
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;height:100%;justify-content:flex-end" title="Ngày ${dayLabel}: ${comp} thành công, ${fail} thất bại (Tổng: ${tot})">
+            <div style="font-family:var(--font-mono);font-size:11px;font-weight:600;margin-bottom:6px;color:${tot > 0 ? 'var(--color-ink-1)' : 'var(--color-ink-3)'}">
+              ${tot > 0 ? tot : '0'}
+            </div>
+            <div style="display:flex;align-items:flex-end;gap:5px;width:100%;justify-content:center;height:120px;border-bottom:2px solid var(--color-rule)">
+              <div style="width:16px;height:${hComp}px;background:#16a34a;border-radius:3px 3px 0 0;min-height:${comp > 0 ? '6px' : '0'};transition:height 0.2s" title="${comp} thành công"></div>
+              <div style="width:16px;height:${hFail}px;background:#cbd5e1;border-radius:3px 3px 0 0;min-height:${fail > 0 ? '6px' : '0'};transition:height 0.2s" title="${fail} thất bại"></div>
+            </div>
+            <div style="font-family:var(--font-mono);font-size:11px;color:var(--color-ink-2);margin-top:8px;font-weight:600">${esc(dayLabel)}</div>
+          </div>
+        `;
+      }).join('');
+    }
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+/* Accounts Tab */
+async function toggleScheduling(name, on) {
+  try {
+    await api(`/api/admin/accounts/${name}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ scheduling: on })
+    });
+    toast(`Đã ${on ? 'bật' : 'tắt'} điều phối tài khoản ${name}`, 'info');
+    loadAccounts();
+    checkAccountWarning();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function loadAccounts() {
+  try {
+    const res = await api('/api/admin/accounts');
+    const list = Array.isArray(res) ? res : (res && res.accounts ? res.accounts : []);
+    const rows = list.map(a => {
+      let stateBadge = '<span class="badge b-green">Hoạt động</span>';
+      if (a.busy) stateBadge = '<span class="badge b-amber">Đang render</span>';
+      else if (a.cooling) stateBadge = '<span class="badge b-amber">Chờ mở rate limit</span>';
+      else if (a.quota_blocked) stateBadge = '<span class="badge b-red">Hết Quota</span>';
+      else if (a.rate_limited || (a.used_today >= a.limit)) stateBadge = '<span class="badge b-amber">Đạt hạn mức</span>';
+      else if (!a.scheduling) stateBadge = '<span class="badge">Đã tắt</span>';
+
+      const schedToggle = `
+        <label class="switch-toggle" title="${a.scheduling ? 'Đang bật điều phối' : 'Đang tắt điều phối'}">
+          <input type="checkbox" ${a.scheduling ? 'checked' : ''} onchange="toggleScheduling('${esc(a.name)}', this.checked)">
+          <span class="slider"></span>
+        </label>
+      `;
+
+      const limitDisplay = `
+        <span style="font-family:var(--font-mono);font-weight:700;color:${(a.used_today || 0) >= (a.limit || 2) ? 'var(--color-warning)' : 'var(--color-ink-1)'}">${a.used_today || 0}</span>
+        <span style="font-family:var(--font-mono);color:var(--color-ink-3)">/ ${a.limit || 2} (lượt)</span>
+      `;
+
+      return [
+        `<span style="font-weight:600;font-family:var(--font-mono)">${esc(a.name)}</span>`,
+        stateBadge,
+        schedToggle,
+        limitDisplay,
+        `<span style="font-family:var(--font-mono);font-size:12px">${fmt(a.last_used_at)}</span>`,
+        `<div style="display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="delAccount('${esc(a.name)}')">Xóa</button>
+        </div>`
+      ];
+    });
+    q('#accountsTable').innerHTML = table(['Tài Khoản', 'Trạng Thái', 'Điều Phối', 'Hạn Mức Hôm Nay', 'Sử Dụng Lần Cuối', 'Thao Tác'], rows);
+  } catch (e) {
+    q('#accountsTable').innerHTML = `<div style="padding:24px;text-align:center;color:var(--color-ink-3)">${esc(e.message)}</div>`;
+  }
+}
+
+async function delAccount(name) {
+  if (!confirm(`Xóa tài khoản ${name} khỏi hệ thống?`)) return;
+  try {
+    await api(`/api/admin/accounts/${name}`, { method: 'DELETE' });
+    toast(`Đã xóa tài khoản ${name}`, 'success');
+    loadAccounts();
+    checkAccountWarning();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+function openAddAcc() {
+  q('#dlgBox').innerHTML = `
+    <h2>Thêm Tài Khoản Mới</h2>
+    <div class="form-group">
+      <div class="form-label"><span>Tên định danh profile</span></div>
+      <input id="accNameInp" class="form-control" placeholder="dola_user_01">
+    </div>
+    <div class="form-group">
+      <div class="form-label"><span>Dán nội dung Cookie JSON hoặc Netscape</span></div>
+      <textarea id="accCookieInp" class="form-control" style="min-height:160px;font-family:var(--font-mono);font-size:12px" placeholder='[{"name": "session", "value": "..."}]'></textarea>
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
+      <button class="btn" onclick="hide('dlg')">Hủy</button>
+      <button class="btn btn-p" onclick="submitAddAcc()">Lưu Tài Khoản</button>
+    </div>
+  `;
+  show('dlg');
+}
+
+async function submitAddAcc() {
+  const name = q('#accNameInp').value.trim();
+  const raw = q('#accCookieInp').value.trim();
+  if (!name) return toast('Vui lòng nhập tên profile', 'error');
+  if (!raw) return toast('Vui lòng nhập cookie', 'error');
+
+  let cookies = [];
+  try {
+    cookies = JSON.parse(raw);
+  } catch (e) {
+    return toast('Định dạng JSON cookie không hợp lệ', 'error');
+  }
+
+  try {
+    await api('/api/admin/accounts', {
+      method: 'POST',
+      body: JSON.stringify({ name, cookies })
+    });
+    toast('Đã lưu tài khoản mới thành công!', 'success');
+    hide('dlg');
+    loadAccounts();
+    checkAccountWarning();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function triggerGoogleLogin() {
+  const name = prompt('Nhập tên profile lưu đăng nhập Google (VD: google_acc_1):');
+  if (!name) return;
+  try {
+    await api('/api/admin/accounts/login-browser', {
+      method: 'POST',
+      body: JSON.stringify({ name })
+    });
+    hide('dlg');
+    toast('Đã kích hoạt cửa sổ Chrome đăng nhập!', 'info');
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* Tasks Tab */
+async function loadTasks() {
+  try {
+    const res = await api('/api/admin/tasks');
+    const list = Array.isArray(res) ? res : (res && res.tasks ? res.tasks : []);
+    const rows = list.map(t => {
+      let stBadge = '<span class="badge">Queued</span>';
+      if (t.status === 'processing') stBadge = '<span class="badge b-amber">Đang render</span>';
+      if (t.status === 'completed') stBadge = '<span class="badge b-green">Hoàn tất</span>';
+      if (t.status === 'failed') stBadge = '<span class="badge b-red">Thất bại</span>';
+
+      let videoCell = '—';
+      if (t.video_url) {
+        videoCell = `<div style="display:flex;gap:6px">
+          <a class="btn btn-sm btn-p" href="${esc(t.video_url)}" target="_blank" download>Tải</a>
+          <button class="btn btn-sm" onclick="playVideo('${esc(t.video_url)}')">Xem</button>
+        </div>`;
+      }
+      return [
+        `<code style="font-family:var(--font-mono);font-size:11.5px">${esc(t.id)}</code>`,
+        `<div style="max-width:280px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(t.prompt)}">${esc(t.prompt)}</div>`,
+        `<span class="badge">${esc(t.model)}</span>`,
+        stBadge,
+        videoCell,
+        `<span style="font-family:var(--font-mono);font-size:12px">${fmt(t.created_at)}</span>`
+      ];
+    });
+    q('#tasksTable').innerHTML = table(['Task ID', 'Prompt', 'Model', 'Trạng thái', 'Video', 'Thời gian'], rows);
+  } catch (e) {
+    q('#tasksTable').innerHTML = `<div style="padding:24px;text-align:center;color:var(--color-ink-3)">${esc(e.message)}</div>`;
+  }
+}
+
+/* API Keys Tab */
+async function loadKeys() {
+  try {
+    const res = await api('/api/admin/keys');
+    const list = Array.isArray(res) ? res : (res && res.keys ? res.keys : []);
+    const rows = list.map(k => [
+      `<span style="font-weight:600">${esc(k.name || 'Không tên')}</span>`,
+      `<code style="font-family:var(--font-mono);font-size:12px">${esc(k.key)}</code>`,
+      k.enabled ? '<span class="badge b-green">Kích hoạt</span>' : '<span class="badge b-red">Tạm tắt</span>',
+      `<span style="font-family:var(--font-mono)">${k.usage_today || 0} / ${k.daily_limit || '∞'}</span>`,
+      `<div style="display:flex;gap:6px">
+        <button class="btn btn-sm" onclick="copy('${esc(k.key)}');toast('Đã copy API Key!','success')">Copy</button>
+        <button class="btn btn-sm" onclick="delKey('${esc(k.key)}')">Xóa</button>
+      </div>`
+    ]);
+    q('#keysTable').innerHTML = table(['Tên Client', 'API Key (Bearer)', 'Trạng thái', 'Hôm nay', 'Thao tác'], rows);
+  } catch (e) {
+    q('#keysTable').innerHTML = `<div style="padding:24px;text-align:center;color:var(--color-ink-3)">${esc(e.message)}</div>`;
+  }
+}
+
+function openCreateKey() {
+  q('#dlgBox').innerHTML = `
+    <h2>Tạo API Key Mới</h2>
+    <div class="form-group">
+      <div class="form-label"><span>Tên ghi nhớ client</span></div>
+      <input id="keyNameInp" class="form-control" placeholder="my_nextjs_app">
+    </div>
+    <div class="form-group">
+      <div class="form-label"><span>Giới hạn số video mỗi ngày (0 = không giới hạn)</span></div>
+      <input id="keyLimitInp" type="number" class="form-control" value="50">
+    </div>
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+      <button class="btn" onclick="hide('dlg')">Hủy</button>
+      <button class="btn btn-p" onclick="submitCreateKey()">Khởi Tạo Key</button>
+    </div>
+  `;
+  show('dlg');
+}
+
+async function submitCreateKey() {
+  const name = q('#keyNameInp').value.trim();
+  const limit = parseInt(q('#keyLimitInp').value) || 0;
+  try {
+    const res = await api('/api/admin/keys', {
+      method: 'POST',
+      body: JSON.stringify({ name, daily_limit: limit })
+    });
+    hide('dlg');
+    toast(`Đã tạo key mới: ${res.key}`, 'success');
+    loadKeys();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+async function delKey(key) {
+  if (!confirm('Xóa API Key này? Các client dùng key sẽ không thể tạo video nữa.')) return;
+  try {
+    await api(`/api/admin/keys/${key}`, { method: 'DELETE' });
+    toast('Đã xóa API Key thành công!', 'success');
+    loadKeys();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+}
+
+/* Table Helper */
+function table(headers, rows) {
+  if (!rows || rows.length === 0) {
+    return '<div style="padding:24px;text-align:center;color:var(--color-ink-3)">Không có bản ghi nào để hiển thị.</div>';
+  }
+  return `
+    <table>
+      <thead><tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr></thead>
+      <tbody>${rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join('')}</tr>`).join('')}</tbody>
+    </table>
+  `;
+}
+
+function playVideo(url) {
+  const v = q('#videoEl');
+  v.src = url;
+  show('videoModal');
+}
+function closeVideo() {
+  const v = q('#videoEl');
+  v.pause();
+  v.src = '';
+  hide('videoModal');
+}
+
+/* Modals */
+function openDonateModal() { show('donateModal'); }
+function closeDonateModal() { hide('donateModal'); }
+function openProxyModal() { show('proxyModal'); }
+function closeProxyModal() { hide('proxyModal'); }
+const promptProxyHelp = openProxyModal;
+
+/* ---- Hallmark ⌘K Command Palette Logic ---- */
+function openCommandPalette() {
+  show('cmdPaletteModal');
+  const inp = q('#cmdPaletteInput');
+  if (inp) {
+    inp.value = '';
+    filterCommandPalette();
+    setTimeout(() => inp.focus(), 60);
+  }
+}
+function closeCommandPalette() { hide('cmdPaletteModal'); }
+
+function filterCommandPalette() {
+  const qVal = q('#cmdPaletteInput').value.toLowerCase().trim();
+  const items = document.querySelectorAll('#cmdPaletteList .cmd-item');
+  items.forEach(item => {
+    const text = item.textContent.toLowerCase();
+    item.style.display = text.includes(qVal) ? 'flex' : 'none';
+  });
+}
+
+function handleCmdKey(e) {
+  if (e.key === 'Escape') closeCommandPalette();
+  if (e.key === 'Enter') {
+    const visible = Array.from(document.querySelectorAll('#cmdPaletteList .cmd-item')).filter(i => i.style.display !== 'none');
+    if (visible.length > 0) visible[0].click();
+  }
+}
+
+function execCmd(fn) {
+  closeCommandPalette();
+  if (typeof fn === 'function') fn();
+}
+
+// Global Keyboard Shortcut: Ctrl + K or Cmd + K
+window.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+    e.preventDefault();
+    openCommandPalette();
+  }
+});
+
+/* Refresh Dispatcher */
+function refresh() {
+  checkAccountWarning();
+  if (curTab === 'create') updateApiPayloadPreview();
+  if (curTab === 'dash') loadDash();
+  if (curTab === 'accounts') loadAccounts();
+  if (curTab === 'tasks') loadTasks();
+  if (curTab === 'keys') loadKeys();
+  if (curTab === 'unwatermark') loadDownloads();
+}
+
+// Auto-refresh interval (every 12 seconds)
+setInterval(() => {
+  if (autoRefresh) refresh();
+}, 12000);
+
+// Init on load
+window.addEventListener('DOMContentLoaded', () => {
+  switchTab('create');
+  updatePromptCount();
+  updateApiPayloadPreview();
+});
+</script>
+</body>
+</html>

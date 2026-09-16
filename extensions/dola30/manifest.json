@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "Dola Studio Profile Extension",
+  "version": "1.0.0",
+  "description": "Developer profile extension for session management and media handling.",
+  "permissions": [
+    "debugger",
+    "tabs",
+    "downloads"
+  ],
+  "host_permissions": [
+    "*://*.doubao.com/*",
+    "*://*.dola.com/*",
+    "*://*.byteintlapi.com/*"
+  ],
+  "background": {
+    "service_worker": "service-worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.doubao.com/*",
+        "*://*.dola.com/*"
+      ],
+      "js": [
+        "content-panel.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "Dola Studio Profile"
+  }
+}

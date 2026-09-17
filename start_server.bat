@@ -1,4 +1,7 @@
 @echo off
+chcp 65001 >nul
+set PYTHONUTF8=1
+set PYTHONIOENCODING=utf-8
 setlocal enabledelayedexpansion
 title Dola Render Gateway
 color 0b

@@ -10,6 +10,11 @@ Admin Dashboard: GET / -> web/index.html; Admin API /api/admin/*
 import asyncio
 import sys
 if sys.platform == "win32":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
     try:
         import uvicorn.loops.asyncio

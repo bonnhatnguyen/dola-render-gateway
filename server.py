@@ -499,7 +499,10 @@ async def _run_add_job(name: str, email: str, password: str, totp: str):
         "message": "Đang mở trình duyệt và tự động điền thông tin đăng nhập Google...",
     }
     try:
-        await add_account_flow(name, email, password, totp)
+        import importlib
+        import add_account
+        importlib.reload(add_account)
+        await add_account.add_account_flow(name, email, password, totp)
         pool.set_email(name, email)
         pool.set_login_status(name, True)
         JOBS[name] = {
@@ -589,13 +592,25 @@ async def _run_headful_login_job(name: str):
                     await asyncio.sleep(2)
                     return
 
-                # Try clicking login button if modal not visible
+                # Dismiss cookie banner and click login entry if needed
                 try:
-                    for sel in ["text=ログイン", "text=Log in", "text=Sign in", "text=Đăng nhập", "button:has-text('Log in')"]:
-                        btn = page.locator(sel).first
-                        if await btn.count() and await btn.is_visible():
-                            await btn.click(timeout=2000)
-                            break
+                    ok_btn = page.locator("button:has-text('OK'), text=OK").first
+                    if await ok_btn.count() and await ok_btn.is_visible():
+                        await ok_btn.click(timeout=2000)
+                except Exception:
+                    pass
+
+                try:
+                    google_btn = page.locator("button:has-text('Googleで続ける'), text=Googleで続ける, text=Continue with Google").first
+                    if not (await google_btn.count() and await google_btn.is_visible()):
+                        for sel in ["text=ログイン", "text=Log in", "text=Sign in", "text=Đăng nhập", "button:has-text('Log in')"]:
+                            btn = page.locator(sel).first
+                            if await btn.count() and await btn.is_visible():
+                                await btn.click(timeout=2000)
+                                break
+                    await page.wait_for_timeout(1000)
+                    if await google_btn.count() and await google_btn.is_visible():
+                        await google_btn.click(timeout=3000)
                 except Exception:
                     pass
 

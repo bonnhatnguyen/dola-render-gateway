@@ -94,7 +94,7 @@ echo  * Swagger API Docs: http://127.0.0.1:8000/docs
 echo ---------------------------------------------------------------------
 echo.
 
-python -c "import uvicorn, config; uvicorn.run('server:app', host=config.HOST, port=config.PORT)"
+python -c "import uvicorn, config; uvicorn.run('server:app', host=config.HOST, port=config.PORT, reload=True)"
 
 echo.
 echo [THONG BAO] Server da ket thuc hoac bi dung!

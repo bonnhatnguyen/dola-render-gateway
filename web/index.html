@@ -1036,9 +1036,24 @@ tr:hover td { background: var(--color-paper-hover); }
           <div class="mono-eyebrow">Account Pool Manager</div>
           <div class="wb-title">Danh Sách Tài Khoản Dola</div>
         </div>
-        <div style="display:flex;gap:10px">
-          <button class="btn" onclick="openLoginAcc()">＋ Đăng Nhập Google (Tự Động / Thủ Công)</button>
-          <button class="btn btn-p" onclick="openAddAcc()">🍪 Thêm Cookie JSON</button>
+        <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+          <button class="btn" onclick="openLoginAcc('auto')">＋ Đăng Nhập Google</button>
+          <button class="btn btn-p" onclick="openBulkLoginModal()">⚡ Đăng Nhập Hàng Loạt</button>
+          <button class="btn" onclick="openAddAcc()">🍪 Thêm Cookie JSON</button>
+        </div>
+      </div>
+
+      <!-- Bulk Login Live Banner (shown if batch running in background) -->
+      <div id="bulkActiveBanner" style="display:none;margin-bottom:16px;padding:12px 16px;background:var(--color-paper-3);border:1px solid var(--color-accent);border-left:4px solid var(--color-accent);border-radius:var(--radius-md);align-items:center;justify-content:space-between;animation:fadeIn 0.2s ease">
+        <div style="display:flex;align-items:center;gap:12px">
+          <span class="spinner" style="border-color:var(--color-accent);border-top-color:transparent"></span>
+          <div>
+            <div style="font-size:13px;font-weight:700;color:var(--color-ink-1)" id="bulkActiveBannerTitle">Đang tự động đăng nhập hàng loạt...</div>
+            <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:2px" id="bulkActiveBannerSub">Hệ thống đang chạy nền an toàn theo từng tài khoản.</div>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-p" onclick="openBulkLoginModal()">Mở Tiến Trình</button>
         </div>
       </div>
 
@@ -1899,48 +1914,17 @@ async function submitAddAcc() {
 let googleLoginPolling = null;
 
 let currentLoginMode = 'auto';
+let googleLoginPolling = null;
+let bulkLoginPolling = null;
+let activeBatchData = null;
 
-function switchLoginMode(mode) {
-  currentLoginMode = mode;
-  const isAuto = mode === 'auto';
-  const btnAuto = q('#pill_tab_auto');
-  const btnManual = q('#pill_tab_manual');
-  const viewAuto = q('#login_view_auto');
-  const viewManual = q('#login_view_manual');
-  const btnSubmit = q('#btnLoginStart');
-
-  if (btnAuto) {
-    btnAuto.className = isAuto ? 'btn btn-sm btn-p' : 'btn btn-sm';
-  }
-  if (btnManual) {
-    btnManual.className = !isAuto ? 'btn btn-sm btn-p' : 'btn btn-sm';
-  }
-  if (viewAuto) viewAuto.style.display = isAuto ? 'block' : 'none';
-  if (viewManual) viewManual.style.display = !isAuto ? 'block' : 'none';
-  if (btnSubmit) btnSubmit.textContent = isAuto ? '⚡ Bắt Đầu Tự Động Đăng Nhập' : '🚀 Mở Cửa Sổ Trình Duyệt';
+function openBulkLoginModal() {
+  openLoginAcc('bulk');
 }
 
-function handleQuickPaste(val) {
-  val = (val || '').trim();
-  if (!val) return;
-  let parts = [];
-  if (val.includes('----')) parts = val.split('----');
-  else if (val.includes('|')) parts = val.split('|');
-  else if (val.includes('\t')) parts = val.split('\t');
-  else if (val.includes(':::')) parts = val.split(':::');
-  else if (val.includes(':') && val.split(':').length === 3) parts = val.split(':');
-
-  if (parts.length >= 2) {
-    if (q('#autoEmailInp')) q('#autoEmailInp').value = parts[0].trim();
-    if (q('#autoPassInp')) q('#autoPassInp').value = parts[1].trim();
-    if (parts.length >= 3 && q('#autoTotpInp')) q('#autoTotpInp').value = parts[2].trim();
-    toast('Đã trích xuất Email, Mật khẩu và Mã 2FA!', 'success');
-  }
-}
-
-function openLoginAcc() {
+function openLoginAcc(targetMode = 'auto') {
   if (googleLoginPolling) clearInterval(googleLoginPolling);
-  currentLoginMode = 'auto';
+  currentLoginMode = targetMode || 'auto';
 
   const existingRows = document.querySelectorAll('#accountsTable tr td:first-child');
   const existingNames = Array.from(existingRows).map(el => el.textContent.trim());
@@ -1950,14 +1934,15 @@ function openLoginAcc() {
 
   q('#dlgBox').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <h2 style="margin:0;display:flex;align-items:center;gap:8px">Đăng Nhập Tài Khoản Google</h2>
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px" id="loginModalTitle">Đăng Nhập Tài Khoản Google</h2>
       <button class="btn btn-sm" onclick="closeLoginAccDialog()">✕</button>
     </div>
 
     <!-- Mode Selector Tabs -->
     <div style="display:flex;gap:8px;margin-bottom:16px;background:var(--color-paper-3);padding:4px;border-radius:var(--radius-md);border:1px solid var(--color-rule)">
-      <button type="button" class="btn btn-sm btn-p" id="pill_tab_auto" onclick="switchLoginMode('auto')" style="flex:1">⚡ Tự Động (Email + Mật Khẩu + 2FA)</button>
-      <button type="button" class="btn btn-sm" id="pill_tab_manual" onclick="switchLoginMode('manual')" style="flex:1">🌐 Thủ Công (Mở Chrome)</button>
+      <button type="button" class="btn btn-sm btn-p" id="pill_tab_auto" onclick="switchLoginMode('auto')" style="flex:1">⚡ 1 Tài Khoản</button>
+      <button type="button" class="btn btn-sm" id="pill_tab_bulk" onclick="switchLoginMode('bulk')" style="flex:1">📋 Hàng Loạt (Nhiều Nick)</button>
+      <button type="button" class="btn btn-sm" id="pill_tab_manual" onclick="switchLoginMode('manual')" style="flex:1">🌐 Thủ Công (Chrome)</button>
     </div>
 
     <div class="form-group" id="loginFormGroup">
@@ -1966,7 +1951,7 @@ function openLoginAcc() {
       <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:4px">Định dạng tên: chỉ gồm chữ cái, số, dấu gạch dưới (VD: acc1, acc2, dola_user).</div>
     </div>
 
-    <!-- Mode 1: Auto Login Form -->
+    <!-- Mode 1: Auto Single Form -->
     <div id="login_view_auto">
       <div class="form-group" style="background:var(--color-paper-3);padding:10px 12px;border:1px dashed var(--color-rule);border-radius:var(--radius-md);margin-bottom:14px">
         <div class="form-label" style="margin-bottom:4px"><span style="font-size:12px;color:var(--color-accent);font-weight:600">📋 Dán nhanh chuỗi (VD: email----pass----2fa hoặc email|pass|2fa):</span></div>
@@ -1992,13 +1977,114 @@ function openLoginAcc() {
       </div>
     </div>
 
-    <!-- Mode 2: Manual Browser Login Form -->
+    <!-- Mode 2: Bulk Login Form -->
+    <div id="login_view_bulk" style="display:none">
+      <div id="bulkInputSection">
+        <div style="background:var(--color-paper-3);border:1px dashed var(--color-rule);border-radius:var(--radius-md);padding:10px 14px;margin-bottom:12px;font-size:12px;color:var(--color-ink-2);line-height:1.5">
+          <span style="color:var(--color-accent);font-weight:700">📋 Hướng dẫn định dạng (mỗi dòng 1 nick):</span><br>
+          • <code>user@gmail.com----Password123----TOTP_SECRET</code><br>
+          • <code>acc5----user@gmail.com----Password123----TOTP_SECRET</code><br>
+          • <i>Hỗ trợ dấu phân cách <code>----</code>, <code>|</code>, <code>:::</code> hoặc <code>tab</code>. Hệ thống sẽ tự động tránh trùng tên nick có sẵn.</i>
+        </div>
+
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+          <div class="form-group" style="margin:0">
+            <div class="form-label" style="margin-bottom:2px"><span>Tiền tố profile</span></div>
+            <input id="bulkPrefixInp" class="form-control" value="acc" placeholder="acc" oninput="updateBulkPreview()">
+          </div>
+          <div class="form-group" style="margin:0">
+            <div class="form-label" style="margin-bottom:2px"><span>Số bắt đầu</span></div>
+            <input id="bulkStartNumInp" type="number" min="1" class="form-control" value="${nextIdx}" oninput="updateBulkPreview()">
+          </div>
+          <div class="form-group" style="margin:0">
+            <div class="form-label" style="margin-bottom:2px"><span>Nghỉ giữa các nick</span></div>
+            <select id="bulkDelaySelect" class="form-control">
+              <option value="1">1 giây</option>
+              <option value="2" selected>2 giây</option>
+              <option value="3">3 giây</option>
+              <option value="5">5 giây</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <div class="form-label" style="margin:0"><span>Danh sách tài khoản Google</span></div>
+            <span id="bulkDetectBadge" class="badge">0 tài khoản</span>
+          </div>
+          <textarea id="bulkAccInput" class="form-control" style="min-height:130px;font-family:var(--font-mono);font-size:12px;white-space:pre" placeholder="user1@gmail.com----Pass123----JBSWY3DPEHPK3PXP&#10;user2@gmail.com----Pass456----JBSWY3DPEHPK3PXP&#10;acc8----user3@gmail.com----Pass789----JBSWY3DPEHPK3PXP" oninput="updateBulkPreview()"></textarea>
+        </div>
+
+        <!-- Live Preview Table (collapsible) -->
+        <div id="bulkPreviewArea" style="display:none;margin-bottom:12px">
+          <div style="font-size:12px;font-weight:600;color:var(--color-ink-2);margin-bottom:6px">
+            Xem trước danh sách (<span id="bulkPreviewCount">0</span> nick):
+          </div>
+          <div style="max-height:140px;overflow-y:auto;border:1px solid var(--color-rule);border-radius:var(--radius-md);background:var(--color-paper-2)">
+            <table style="width:100%;font-size:11.5px;border-collapse:collapse;font-family:var(--font-mono)">
+              <thead>
+                <tr style="background:var(--color-paper-3);border-bottom:1px solid var(--color-rule);text-align:left">
+                  <th style="padding:6px 10px;width:34px">#</th>
+                  <th style="padding:6px 10px;width:90px">Profile</th>
+                  <th style="padding:6px 10px">Email</th>
+                  <th style="padding:6px 10px;width:110px">2FA Secret</th>
+                </tr>
+              </thead>
+              <tbody id="bulkPreviewBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Live Progress & Queue Box (shown when running or completed) -->
+      <div id="bulkProgressBox" style="display:none;margin-top:10px;padding:14px;border-radius:var(--radius-md);background:var(--color-paper-3);border:1px solid var(--color-rule)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span id="bulkSpinner" class="spinner"></span>
+            <span id="bulkProgressTitle" style="font-weight:700;font-size:13.5px;color:var(--color-ink-1)">Đang xử lý hàng loạt...</span>
+          </div>
+          <span id="bulkProgressPct" class="badge b-amber">0%</span>
+        </div>
+
+        <!-- Progress bar -->
+        <div style="width:100%;height:8px;background:var(--color-rule);border-radius:4px;overflow:hidden;margin-bottom:10px">
+          <div id="bulkProgressBar" style="width:0%;height:100%;background:linear-gradient(90deg, var(--color-accent), #38bdf8);transition:width 0.3s ease"></div>
+        </div>
+
+        <!-- Counts row -->
+        <div style="display:flex;gap:14px;font-size:12px;margin-bottom:12px;flex-wrap:wrap">
+          <span style="color:var(--color-success);font-weight:600">✓ Thành công: <b id="bulkCountSuccess">0</b></span>
+          <span style="color:var(--color-danger);font-weight:600">✕ Thất bại: <b id="bulkCountFailed">0</b></span>
+          <span style="color:var(--color-ink-2)">⏳ Đang chạy: <b id="bulkCurrentAccount">—</b></span>
+          <span style="color:var(--color-ink-3)">📋 Tổng số: <b id="bulkCountTotal">0</b></span>
+        </div>
+
+        <!-- Queue status table -->
+        <div style="max-height:220px;overflow-y:auto;border:1px solid var(--color-rule);border-radius:var(--radius-md);background:#ffffff">
+          <table style="width:100%;font-size:11.5px;border-collapse:collapse">
+            <thead>
+              <tr style="background:var(--color-paper-3);border-bottom:1px solid var(--color-rule);text-align:left">
+                <th style="padding:6px 10px;width:34px">#</th>
+                <th style="padding:6px 10px;width:80px">Profile</th>
+                <th style="padding:6px 10px">Email</th>
+                <th style="padding:6px 10px;width:110px">Trạng thái</th>
+                <th style="padding:6px 10px">Ghi chú / Lỗi</th>
+              </tr>
+            </thead>
+            <tbody id="bulkQueueBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode 3: Manual Browser Login Form -->
     <div id="login_view_manual" style="display:none">
       <p style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:12px">
         Hệ thống sẽ mở một cửa sổ <b>Google Chrome</b> trực tiếp trên màn hình máy chủ/máy tính của bạn để bạn tự do thao tác đăng nhập Google vào <b>Dola</b>. Dành cho tài khoản cá nhân, xác minh qua số điện thoại hoặc app xác thực.
       </p>
     </div>
 
+    <!-- Status box for single account mode -->
     <div id="loginStatusBox" style="display:none;margin-top:14px;padding:14px;border-radius:var(--radius-md);background:var(--color-paper-3);border:1px solid var(--color-rule)">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
         <span id="loginSpinner" class="spinner"></span>
@@ -2008,12 +2094,20 @@ function openLoginAcc() {
       <div id="loginTimerText" style="font-size:11px;font-family:var(--font-mono);color:var(--color-ink-3);margin-top:8px"></div>
     </div>
 
-    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
-      <button class="btn" id="btnLoginCancel" onclick="closeLoginAccDialog()">Đóng</button>
-      <button class="btn btn-p" id="btnLoginStart" onclick="submitGoogleLogin()">⚡ Bắt Đầu Tự Động Đăng Nhập</button>
+    <!-- Footer Actions -->
+    <div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:18px">
+      <div>
+        <button class="btn btn-sm btn-danger" id="btnBulkCancel" style="display:none" onclick="cancelBulkLogin()">🛑 Dừng Hàng Đợi</button>
+      </div>
+      <div style="display:flex;gap:10px">
+        <button class="btn" id="btnLoginCancel" onclick="closeLoginAccDialog()">Đóng</button>
+        <button class="btn btn-p" id="btnLoginStart" onclick="submitActiveLogin()">⚡ Bắt Đầu Tự Động Đăng Nhập</button>
+      </div>
     </div>
   `;
+
   show('dlg');
+  switchLoginMode(currentLoginMode);
 }
 
 function closeLoginAccDialog() {
@@ -2021,7 +2115,217 @@ function closeLoginAccDialog() {
     clearInterval(googleLoginPolling);
     googleLoginPolling = null;
   }
+  const box = q('#dlgBox');
+  if (box) {
+    box.style.width = '';
+    box.style.maxWidth = '';
+  }
   hide('dlg');
+}
+
+function switchLoginMode(mode) {
+  currentLoginMode = mode;
+  const isAuto = mode === 'auto';
+  const isBulk = mode === 'bulk';
+  const isManual = mode === 'manual';
+
+  const btnAuto = q('#pill_tab_auto');
+  const btnBulk = q('#pill_tab_bulk');
+  const btnManual = q('#pill_tab_manual');
+  const viewAuto = q('#login_view_auto');
+  const viewBulk = q('#login_view_bulk');
+  const viewManual = q('#login_view_manual');
+  const loginFormGroup = q('#loginFormGroup');
+  const btnSubmit = q('#btnLoginStart');
+  const btnCancel = q('#btnLoginCancel');
+  const btnBulkCancel = q('#btnBulkCancel');
+  const box = q('#dlgBox');
+
+  if (btnAuto) btnAuto.className = isAuto ? 'btn btn-sm btn-p' : 'btn btn-sm';
+  if (btnBulk) btnBulk.className = isBulk ? 'btn btn-sm btn-p' : 'btn btn-sm';
+  if (btnManual) btnManual.className = isManual ? 'btn btn-sm btn-p' : 'btn btn-sm';
+
+  if (viewAuto) viewAuto.style.display = isAuto ? 'block' : 'none';
+  if (viewBulk) viewBulk.style.display = isBulk ? 'block' : 'none';
+  if (viewManual) viewManual.style.display = isManual ? 'block' : 'none';
+  if (loginFormGroup) loginFormGroup.style.display = isBulk ? 'none' : 'block';
+
+  if (box) {
+    if (isBulk) {
+      box.style.width = '740px';
+      box.style.maxWidth = '95vw';
+    } else {
+      box.style.width = '';
+      box.style.maxWidth = '';
+    }
+  }
+
+  if (isBulk) {
+    if (activeBatchData && activeBatchData.status === 'running') {
+      if (btnSubmit) btnSubmit.style.display = 'none';
+      if (btnBulkCancel) btnBulkCancel.style.display = 'inline-block';
+      if (btnCancel) btnCancel.textContent = 'Ẩn Cửa Sổ (Chạy Ngầm)';
+      renderBulkProgress(activeBatchData);
+    } else {
+      if (btnSubmit) {
+        btnSubmit.style.display = 'inline-block';
+        btnSubmit.textContent = '🚀 Bắt Đầu Đăng Nhập Hàng Loạt';
+      }
+      if (btnBulkCancel) btnBulkCancel.style.display = 'none';
+      if (btnCancel) btnCancel.textContent = 'Đóng';
+      updateBulkPreview();
+    }
+  } else if (isAuto) {
+    if (btnSubmit) {
+      btnSubmit.style.display = 'inline-block';
+      btnSubmit.textContent = '⚡ Bắt Đầu Tự Động Đăng Nhập';
+    }
+    if (btnBulkCancel) btnBulkCancel.style.display = 'none';
+    if (btnCancel) btnCancel.textContent = 'Đóng';
+  } else {
+    if (btnSubmit) {
+      btnSubmit.style.display = 'inline-block';
+      btnSubmit.textContent = '🌐 Mở Cửa Sổ Trình Duyệt';
+    }
+    if (btnBulkCancel) btnBulkCancel.style.display = 'none';
+    if (btnCancel) btnCancel.textContent = 'Đóng';
+  }
+}
+
+function handleQuickPaste(val) {
+  val = (val || '').trim();
+  if (!val) return;
+  let parts = [];
+  if (val.includes('----')) parts = val.split('----');
+  else if (val.includes('|')) parts = val.split('|');
+  else if (val.includes('\t')) parts = val.split('\t');
+  else if (val.includes(':::')) parts = val.split(':::');
+  else if (val.includes(':') && val.split(':').length === 3) parts = val.split(':');
+
+  if (parts.length >= 2) {
+    if (q('#autoEmailInp')) q('#autoEmailInp').value = parts[0].trim();
+    if (q('#autoPassInp')) q('#autoPassInp').value = parts[1].trim();
+    if (parts.length >= 3 && q('#autoTotpInp')) q('#autoTotpInp').value = parts[2].trim();
+    toast('Đã trích xuất Email, Mật khẩu và Mã 2FA!', 'success');
+  }
+}
+
+function parseBulkInputClient(text, prefix = 'acc', startNum = 1) {
+  const existingRows = document.querySelectorAll('#accountsTable tr td:first-child');
+  const usedNames = new Set(Array.from(existingRows).map(el => el.textContent.trim()));
+  const cleanPrefix = (prefix || 'acc').replace(/[^A-Za-z0-9_-]/g, '') || 'acc';
+  let counter = Math.max(1, parseInt(startNum) || 1);
+
+  function getNextName() {
+    while (usedNames.has(`${cleanPrefix}${counter}`)) counter++;
+    const n = `${cleanPrefix}${counter}`;
+    usedNames.add(n);
+    counter++;
+    return n;
+  }
+
+  const lines = (text || '').split('\n').map(l => l.trim()).filter(l => l && !l.startsWith('#') && !l.startsWith('//'));
+  const items = [];
+
+  for (const line of lines) {
+    let parts = [];
+    if (line.includes('----')) parts = line.split('----');
+    else if (line.includes('|')) parts = line.split('|');
+    else if (line.includes('\t')) parts = line.split('\t');
+    else if (line.includes(':::')) parts = line.split(':::');
+    else if (line.includes(':') && line.split(':').length >= 3) parts = line.split(':');
+    else parts = line.split(/\s+/).filter(Boolean);
+
+    parts = parts.map(p => p.trim());
+    if (!parts.length) continue;
+
+    let name = '', email = '', pass = '', totp = '';
+    if (parts[0].includes('@')) {
+      email = parts[0];
+      pass = parts[1] || '';
+      totp = parts[2] || '';
+      name = getNextName();
+    } else if (parts.length > 1 && parts[1].includes('@')) {
+      name = parts[0].replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32);
+      if (!name || usedNames.has(name)) name = getNextName();
+      else usedNames.add(name);
+      email = parts[1];
+      pass = parts[2] || '';
+      totp = parts[3] || '';
+    } else {
+      if (parts.length >= 2) {
+        email = parts[0];
+        pass = parts[1];
+        totp = parts[2] || '';
+        name = getNextName();
+      }
+    }
+    if (email && pass) {
+      items.push({ name, email, pass, totp });
+    }
+  }
+  return items;
+}
+
+function updateBulkPreview() {
+  const inp = q('#bulkAccInput');
+  const raw = inp ? inp.value : '';
+  const prefix = q('#bulkPrefixInp') ? q('#bulkPrefixInp').value : 'acc';
+  const startNum = q('#bulkStartNumInp') ? q('#bulkStartNumInp').value : 1;
+  const items = parseBulkInputClient(raw, prefix, startNum);
+
+  const badge = q('#bulkDetectBadge');
+  const area = q('#bulkPreviewArea');
+  const countSpan = q('#bulkPreviewCount');
+  const tbody = q('#bulkPreviewBody');
+  const btnSubmit = q('#btnLoginStart');
+
+  if (badge) {
+    badge.textContent = `${items.length} tài khoản`;
+    badge.className = items.length > 0 ? 'badge b-green' : 'badge';
+  }
+
+  if (items.length > 0) {
+    if (area) area.style.display = 'block';
+    if (countSpan) countSpan.textContent = items.length;
+    if (tbody) {
+      tbody.innerHTML = items.map((it, idx) => `
+        <tr style="border-bottom:1px solid var(--color-rule)">
+          <td style="padding:5px 10px;color:var(--color-ink-3)">${idx + 1}</td>
+          <td style="padding:5px 10px;font-weight:600;color:var(--color-ink-1)"><code>${esc(it.name)}</code></td>
+          <td style="padding:5px 10px;color:var(--color-ink-1)">${esc(it.email)}</td>
+          <td style="padding:5px 10px">${it.totp ? `<span class="badge b-green" style="font-size:10px">✓ 2FA OK</span>` : `<span class="badge" style="font-size:10px">Không có 2FA</span>`}</td>
+        </tr>
+      `).join('');
+    }
+    if (btnSubmit && currentLoginMode === 'bulk') {
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = `🚀 Bắt Đầu Đăng Nhập Hàng Loạt (${items.length} nick)`;
+    }
+  } else {
+    if (area) area.style.display = 'none';
+    if (btnSubmit && currentLoginMode === 'bulk') {
+      btnSubmit.disabled = true;
+      btnSubmit.textContent = '🚀 Bắt Đầu Đăng Nhập Hàng Loạt';
+    }
+  }
+}
+
+function submitActiveLogin() {
+  if (currentLoginMode === 'bulk') {
+    if (activeBatchData && activeBatchData.status === 'completed') {
+      activeBatchData = null;
+      const secInput = q('#bulkInputSection');
+      const boxProg = q('#bulkProgressBox');
+      if (secInput) secInput.style.display = 'block';
+      if (boxProg) boxProg.style.display = 'none';
+      switchLoginMode('bulk');
+      return;
+    }
+    submitBulkLogin();
+  } else {
+    submitGoogleLogin();
+  }
 }
 
 async function submitGoogleLogin() {
@@ -2171,6 +2475,240 @@ function startPollingLoginStatus(name) {
       console.warn('Poll login status error:', err);
     }
   }, 2000);
+}
+
+async function submitBulkLogin() {
+  const inp = q('#bulkAccInput');
+  const raw = inp ? inp.value.trim() : '';
+  const prefix = q('#bulkPrefixInp') ? q('#bulkPrefixInp').value.trim() : 'acc';
+  const startNum = q('#bulkStartNumInp') ? parseInt(q('#bulkStartNumInp').value) || 1 : 1;
+  const delaySec = q('#bulkDelaySelect') ? parseInt(q('#bulkDelaySelect').value) || 2 : 2;
+
+  const clientItems = parseBulkInputClient(raw, prefix, startNum);
+  if (!clientItems.length) {
+    return toast('Không tìm thấy tài khoản hợp lệ nào. Vui lòng kiểm tra định dạng dán vào.', 'error');
+  }
+
+  const btnSubmit = q('#btnLoginStart');
+  const btnCancel = q('#btnLoginCancel');
+  const btnBulkCancel = q('#btnBulkCancel');
+  const secInput = q('#bulkInputSection');
+  const boxProg = q('#bulkProgressBox');
+
+  if (btnSubmit) {
+    btnSubmit.disabled = true;
+    btnSubmit.style.display = 'none';
+  }
+  if (btnBulkCancel) btnBulkCancel.style.display = 'inline-block';
+  if (btnCancel) btnCancel.textContent = 'Ẩn Cửa Sổ (Chạy Ngầm)';
+
+  if (secInput) secInput.style.display = 'none';
+  if (boxProg) boxProg.style.display = 'block';
+
+  try {
+    const res = await api('/api/admin/accounts/bulk-login', {
+      method: 'POST',
+      body: JSON.stringify({
+        raw_text: raw,
+        prefix: prefix,
+        start_num: startNum,
+        delay_seconds: delaySec
+      })
+    });
+    toast(`Đã kích hoạt hàng đợi đăng nhập cho ${res.batch.total} tài khoản!`, 'info');
+    activeBatchData = res.batch;
+    renderBulkProgress(res.batch);
+    startBulkPolling();
+  } catch (err) {
+    toast(`Lỗi: ${err.message}`, 'error');
+    if (secInput) secInput.style.display = 'block';
+    if (boxProg) boxProg.style.display = 'none';
+    if (btnSubmit) {
+      btnSubmit.disabled = false;
+      btnSubmit.style.display = 'inline-block';
+    }
+    if (btnBulkCancel) btnBulkCancel.style.display = 'none';
+    if (btnCancel) btnCancel.textContent = 'Đóng';
+  }
+}
+
+function renderBulkProgress(batch) {
+  if (!batch) return;
+  activeBatchData = batch;
+
+  const total = batch.total || 1;
+  const completed = (batch.success_count || 0) + (batch.failed_count || 0);
+  const pct = Math.round((completed / total) * 100);
+
+  const bar = q('#bulkProgressBar');
+  const pctBadge = q('#bulkProgressPct');
+  const title = q('#bulkProgressTitle');
+  const spinner = q('#bulkSpinner');
+  const countSuccess = q('#bulkCountSuccess');
+  const countFailed = q('#bulkCountFailed');
+  const currAcc = q('#bulkCurrentAccount');
+  const countTotal = q('#bulkCountTotal');
+  const tbody = q('#bulkQueueBody');
+  const btnSubmit = q('#btnLoginStart');
+  const btnCancel = q('#btnLoginCancel');
+  const btnBulkCancel = q('#btnBulkCancel');
+
+  if (bar) bar.style.width = `${pct}%`;
+  if (pctBadge) pctBadge.textContent = `${pct}%`;
+  if (countSuccess) countSuccess.textContent = batch.success_count || 0;
+  if (countFailed) countFailed.textContent = batch.failed_count || 0;
+  if (currAcc) currAcc.textContent = batch.current_account || '—';
+  if (countTotal) countTotal.textContent = total;
+
+  if (batch.status === 'running') {
+    if (title) title.textContent = `Đang xử lý: ${batch.current_account || '...'} (${completed + 1}/${total})`;
+    if (spinner) spinner.style.display = 'inline-block';
+    if (btnBulkCancel) btnBulkCancel.style.display = 'inline-block';
+    if (btnSubmit) btnSubmit.style.display = 'none';
+    if (btnCancel) btnCancel.textContent = 'Ẩn Cửa Sổ (Chạy Ngầm)';
+  } else if (batch.status === 'completed') {
+    if (title) {
+      title.textContent = `✓ Đã hoàn tất: ${batch.success_count}/${total} tài khoản thành công`;
+      title.style.color = 'var(--color-success)';
+    }
+    if (spinner) spinner.style.display = 'none';
+    if (bar) bar.style.background = 'var(--color-success)';
+    if (btnBulkCancel) btnBulkCancel.style.display = 'none';
+    if (btnSubmit) {
+      btnSubmit.style.display = 'inline-block';
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = '🔄 Đăng Nhập Đợt Mới';
+    }
+    if (btnCancel) btnCancel.textContent = 'Đóng';
+  } else if (batch.status === 'cancelled') {
+    if (title) {
+      title.textContent = `Đã dừng hàng đợi (${batch.success_count} thành công, ${batch.failed_count} thất bại)`;
+      title.style.color = 'var(--color-ink-2)';
+    }
+    if (spinner) spinner.style.display = 'none';
+    if (btnBulkCancel) btnBulkCancel.style.display = 'none';
+    if (btnSubmit) {
+      btnSubmit.style.display = 'inline-block';
+      btnSubmit.disabled = false;
+      btnSubmit.textContent = '🔄 Đăng Nhập Đợt Mới';
+    }
+    if (btnCancel) btnCancel.textContent = 'Đóng';
+  }
+
+  if (tbody && batch.items) {
+    tbody.innerHTML = batch.items.map((it, idx) => {
+      let stBadge = '<span class="badge">Chờ</span>';
+      if (it.status === 'running') stBadge = '<span class="badge b-amber"><span class="spinner" style="width:10px;height:10px;border-width:1.5px;margin-right:4px"></span>Đang xử lý</span>';
+      if (it.status === 'success') stBadge = '<span class="badge b-green">✓ Thành công</span>';
+      if (it.status === 'failed') stBadge = '<span class="badge b-red">✕ Thất bại</span>';
+      if (it.status === 'cancelled') stBadge = '<span class="badge">Đã hủy</span>';
+
+      let detail = it.message || '';
+      if (it.error) {
+        detail = `<span style="color:var(--color-danger)">${esc(it.error)}</span>`;
+      }
+
+      return `
+        <tr style="border-bottom:1px solid var(--color-rule)">
+          <td style="padding:6px 10px;color:var(--color-ink-3)">${idx + 1}</td>
+          <td style="padding:6px 10px;font-weight:600"><code>${esc(it.name)}</code></td>
+          <td style="padding:6px 10px">${esc(it.email)}</td>
+          <td style="padding:6px 10px">${stBadge}</td>
+          <td style="padding:6px 10px;font-size:11px;color:var(--color-ink-2)">${detail}</td>
+        </tr>
+      `;
+    }).join('');
+  }
+}
+
+function startBulkPolling() {
+  if (bulkLoginPolling) clearInterval(bulkLoginPolling);
+
+  const banner = q('#bulkActiveBanner');
+  const bannerTitle = q('#bulkActiveBannerTitle');
+  const bannerSub = q('#bulkActiveBannerSub');
+
+  let prevSuccess = (activeBatchData && activeBatchData.success_count) || 0;
+
+  bulkLoginPolling = setInterval(async () => {
+    try {
+      const res = await api('/api/admin/accounts/bulk-login/status');
+      if (!res.ok || !res.batch || res.batch.status === 'none') {
+        clearInterval(bulkLoginPolling);
+        bulkLoginPolling = null;
+        if (banner) banner.style.display = 'none';
+        return;
+      }
+
+      const batch = res.batch;
+      activeBatchData = batch;
+
+      if (batch.status === 'running') {
+        if (banner) {
+          banner.style.display = 'flex';
+          if (bannerTitle) bannerTitle.textContent = `⚡ Đang đăng nhập hàng loạt: ${batch.completed_count}/${batch.total} (Đang chạy: ${batch.current_account || '...'})`;
+          if (bannerSub) bannerSub.textContent = `Đã thành công ${batch.success_count} nick, thất bại ${batch.failed_count} nick. Bấm để xem chi tiết.`;
+        }
+      } else {
+        if (banner) banner.style.display = 'none';
+      }
+
+      // If in bulk modal, render progress live
+      if (currentLoginMode === 'bulk' && q('#dlg') && q('#dlg').style.display !== 'none') {
+        const secInput = q('#bulkInputSection');
+        const boxProg = q('#bulkProgressBox');
+        if (secInput) secInput.style.display = 'none';
+        if (boxProg) boxProg.style.display = 'block';
+        renderBulkProgress(batch);
+      }
+
+      // If a new account completed successfully, refresh accounts table in background
+      if (batch.success_count > prevSuccess) {
+        prevSuccess = batch.success_count;
+        loadAccounts();
+        checkAccountWarning();
+      }
+
+      // Check termination
+      if (batch.status === 'completed' || batch.status === 'cancelled') {
+        clearInterval(bulkLoginPolling);
+        bulkLoginPolling = null;
+        if (batch.status === 'completed') {
+          toast(`✓ Hoàn tất đăng nhập hàng loạt: ${batch.success_count}/${batch.total} tài khoản thành công!`, 'success');
+        } else {
+          toast(`Đã dừng tiến trình đăng nhập hàng loạt (${batch.success_count} thành công, ${batch.failed_count} thất bại).`, 'info');
+        }
+        loadAccounts();
+        checkAccountWarning();
+      }
+    } catch (e) {
+      console.warn('Bulk poll error:', e);
+    }
+  }, 2000);
+}
+
+async function cancelBulkLogin() {
+  const btn = q('#btnBulkCancel');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Đang dừng...';
+  }
+  try {
+    await api('/api/admin/accounts/bulk-login/cancel', { method: 'POST' });
+    toast('Đã gửi lệnh dừng tiến trình hàng loạt', 'info');
+  } catch (e) {
+    toast(`Lỗi: ${e.message}`, 'error');
+  }
+}
+
+async function checkBulkStatusOnPageLoad() {
+  try {
+    const res = await api('/api/admin/accounts/bulk-login/status');
+    if (res && res.batch && res.batch.status === 'running') {
+      activeBatchData = res.batch;
+      startBulkPolling();
+    }
+  } catch (e) {}
 }
 
 /* Tasks Tab */
@@ -2368,6 +2906,7 @@ window.addEventListener('DOMContentLoaded', () => {
   switchTab('create');
   updatePromptCount();
   updateApiPayloadPreview();
+  checkBulkStatusOnPageLoad();
 });
 </script>
 </body>

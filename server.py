@@ -48,6 +48,8 @@ app.mount("/videos", StaticFiles(directory=config.DOWNLOAD_DIR), name="videos")
 
 # Background jobs (add/verify), in-memory
 JOBS: dict[str, dict] = {}
+BATCH_JOBS: dict[str, dict] = {}
+ACTIVE_BATCH_ID: str | None = None
 
 SIZE_TO_RATIO = {
     "1280x720": "16:9", "1920x1080": "16:9",
@@ -424,6 +426,13 @@ class LoginBrowserBody(BaseModel):
     name: str = "acc1"
 
 
+class BulkLoginRequest(BaseModel):
+    raw_text: str = ""
+    prefix: str = "acc"
+    start_num: int = 1
+    delay_seconds: int = 2
+
+
 class KeyCreate(BaseModel):
     name: str = ""
     daily_limit: int = Field(0, ge=0, le=1_000_000)
@@ -752,6 +761,277 @@ async def admin_account_login_browser_cancel(body: LoginBrowserBody, x_admin_key
         JOBS[body.name]["status"] = "cancelled"
         JOBS[body.name]["message"] = "Đã hủy tiến trình đăng nhập."
     return {"ok": True}
+
+
+def parse_bulk_accounts(raw_text: str, default_prefix: str = "acc", start_num: int = 1, existing_names: set[str] | None = None) -> list[dict]:
+    if existing_names is None:
+        existing_names = set(pool.accounts)
+    used_names = set(existing_names)
+    results = []
+
+    clean_prefix = re.sub(r"[^A-Za-z0-9_-]", "", default_prefix) or "acc"
+    counter = max(1, start_num)
+
+    def get_next_name():
+        nonlocal counter
+        while f"{clean_prefix}{counter}" in used_names:
+            counter += 1
+        name = f"{clean_prefix}{counter}"
+        used_names.add(name)
+        counter += 1
+        return name
+
+    for raw_line in raw_text.splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or line.startswith("//"):
+            continue
+
+        parts = []
+        if "----" in line:
+            parts = [p.strip() for p in line.split("----")]
+        elif "|" in line:
+            parts = [p.strip() for p in line.split("|")]
+        elif "\t" in line:
+            parts = [p.strip() for p in line.split("\t")]
+        elif ":::" in line:
+            parts = [p.strip() for p in line.split(":::")]
+        elif ":" in line and len(line.split(":")) >= 3:
+            parts = [p.strip() for p in line.split(":")]
+        else:
+            parts = [p.strip() for p in line.split() if p.strip()]
+
+        if not parts:
+            continue
+
+        name = ""
+        email = ""
+        password = ""
+        totp = ""
+
+        # Case 1: First part contains '@' -> It's the email
+        if "@" in parts[0]:
+            email = parts[0]
+            password = parts[1] if len(parts) > 1 else ""
+            totp = parts[2] if len(parts) > 2 else ""
+            name = get_next_name()
+        # Case 2: First part is a profile name, second part is email
+        elif len(parts) > 1 and "@" in parts[1]:
+            cand_name = re.sub(r"[^A-Za-z0-9_-]", "", parts[0])[:32]
+            email = parts[1]
+            password = parts[2] if len(parts) > 2 else ""
+            totp = parts[3] if len(parts) > 3 else ""
+            if cand_name and cand_name not in used_names:
+                name = cand_name
+                used_names.add(name)
+            else:
+                name = get_next_name()
+        else:
+            if len(parts) >= 2:
+                email = parts[0]
+                password = parts[1]
+                totp = parts[2] if len(parts) > 2 else ""
+                name = get_next_name()
+            else:
+                continue
+
+        if email and password:
+            results.append({
+                "name": name,
+                "email": email,
+                "password": password,
+                "totp": totp,
+            })
+
+    return results
+
+
+def _sanitize_batch(batch: dict) -> dict:
+    return {
+        "id": batch.get("id", ""),
+        "status": batch.get("status", "none"),
+        "total": batch.get("total", 0),
+        "completed_count": batch.get("completed_count", 0),
+        "success_count": batch.get("success_count", 0),
+        "failed_count": batch.get("failed_count", 0),
+        "current_account": batch.get("current_account", ""),
+        "current_index": batch.get("current_index", 0),
+        "started_at": batch.get("started_at", 0),
+        "finished_at": batch.get("finished_at"),
+        "items": [
+            {
+                "name": it.get("name", ""),
+                "email": it.get("email", ""),
+                "has_totp": bool(it.get("totp")),
+                "status": it.get("status", "pending"),
+                "error": it.get("error", ""),
+                "message": it.get("message", ""),
+                "started_at": it.get("started_at", 0),
+                "finished_at": it.get("finished_at", 0),
+            }
+            for it in batch.get("items", [])
+        ],
+    }
+
+
+async def _run_bulk_login_worker(batch_id: str, delay_seconds: int = 2):
+    global ACTIVE_BATCH_ID
+    batch = BATCH_JOBS.get(batch_id)
+    if not batch:
+        return
+
+    import importlib
+    import add_account
+
+    try:
+        for idx, item in enumerate(batch["items"]):
+            if batch.get("status") == "cancelled":
+                break
+
+            batch["current_index"] = idx + 1
+            batch["current_account"] = item["name"]
+            item["status"] = "running"
+            item["started_at"] = time.time()
+            item["message"] = "Đang mở trình duyệt và đăng nhập Google..."
+
+            JOBS[item["name"]] = {
+                "kind": "bulk_add",
+                "status": "running",
+                "batch_id": batch_id,
+                "error": "",
+                "started_at": time.time(),
+                "message": f"Đang đăng nhập hàng loạt ({idx + 1}/{batch['total']})...",
+            }
+
+            try:
+                importlib.reload(add_account)
+                await add_account.add_account_flow(
+                    item["name"], item["email"], item["password"], item["totp"]
+                )
+                pool.set_email(item["name"], item["email"])
+                pool.set_login_status(item["name"], True)
+                item["status"] = "success"
+                item["message"] = "Đăng nhập thành công!"
+                item["finished_at"] = time.time()
+                batch["success_count"] += 1
+                if item["name"] in JOBS:
+                    JOBS[item["name"]]["status"] = "success"
+                    JOBS[item["name"]]["message"] = "Tài khoản đã đăng nhập thành công!"
+            except Exception as e:
+                err_msg = str(e)[:250]
+                item["status"] = "failed"
+                item["error"] = err_msg
+                item["message"] = f"Lỗi: {err_msg}"
+                item["finished_at"] = time.time()
+                batch["failed_count"] += 1
+                if item["name"] in JOBS:
+                    JOBS[item["name"]]["status"] = "failed"
+                    JOBS[item["name"]]["error"] = err_msg
+
+            batch["completed_count"] = batch["success_count"] + batch["failed_count"]
+
+            if batch.get("status") == "cancelled":
+                break
+
+            if idx < len(batch["items"]) - 1:
+                await asyncio.sleep(max(1, delay_seconds))
+    finally:
+        if batch.get("status") == "cancelled":
+            for rem in batch["items"]:
+                if rem.get("status") == "pending":
+                    rem["status"] = "cancelled"
+                    rem["message"] = "Đã bị hủy bởi người dùng"
+        else:
+            batch["status"] = "completed"
+        batch["finished_at"] = time.time()
+        if ACTIVE_BATCH_ID == batch_id:
+            ACTIVE_BATCH_ID = None
+
+
+@app.post("/api/admin/accounts/bulk-parse")
+async def admin_account_bulk_parse(body: BulkLoginRequest, x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    parsed = parse_bulk_accounts(body.raw_text, body.prefix, body.start_num, set(pool.accounts))
+    return {
+        "ok": True,
+        "total": len(parsed),
+        "items": [
+            {
+                "name": it["name"],
+                "email": it["email"],
+                "has_totp": bool(it["totp"]),
+            }
+            for it in parsed
+        ],
+    }
+
+
+@app.post("/api/admin/accounts/bulk-login", status_code=202)
+async def admin_account_bulk_login(body: BulkLoginRequest, x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    global ACTIVE_BATCH_ID
+    if ACTIVE_BATCH_ID and BATCH_JOBS.get(ACTIVE_BATCH_ID, {}).get("status") == "running":
+        raise HTTPException(409, "Một tiến trình đăng nhập hàng loạt khác đang chạy!")
+
+    items = parse_bulk_accounts(body.raw_text, body.prefix, body.start_num, set(pool.accounts))
+    if not items:
+        raise HTTPException(400, "Không tìm thấy tài khoản hợp lệ nào trong nội dung dán vào.")
+
+    batch_id = f"batch_{int(time.time())}"
+    BATCH_JOBS[batch_id] = {
+        "id": batch_id,
+        "status": "running",
+        "total": len(items),
+        "completed_count": 0,
+        "success_count": 0,
+        "failed_count": 0,
+        "current_account": "",
+        "current_index": 0,
+        "started_at": time.time(),
+        "finished_at": None,
+        "items": [
+            {
+                "name": it["name"],
+                "email": it["email"],
+                "password": it["password"],
+                "totp": it["totp"],
+                "status": "pending",
+                "error": "",
+                "message": "Chờ xử lý...",
+                "started_at": 0,
+                "finished_at": 0,
+            }
+            for it in items
+        ],
+    }
+    ACTIVE_BATCH_ID = batch_id
+    asyncio.create_task(_run_bulk_login_worker(batch_id, body.delay_seconds))
+    return {"ok": True, "batch": _sanitize_batch(BATCH_JOBS[batch_id])}
+
+
+@app.get("/api/admin/accounts/bulk-login/status")
+async def admin_account_bulk_login_status(batch_id: str | None = None, x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    target_id = batch_id or ACTIVE_BATCH_ID
+    batch = None
+    if target_id and target_id in BATCH_JOBS:
+        batch = BATCH_JOBS[target_id]
+    elif BATCH_JOBS:
+        latest_key = list(BATCH_JOBS.keys())[-1]
+        batch = BATCH_JOBS[latest_key]
+
+    if not batch:
+        return {"ok": True, "status": "none"}
+    return {"ok": True, "batch": _sanitize_batch(batch)}
+
+
+@app.post("/api/admin/accounts/bulk-login/cancel")
+async def admin_account_bulk_login_cancel(x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    global ACTIVE_BATCH_ID
+    if ACTIVE_BATCH_ID and ACTIVE_BATCH_ID in BATCH_JOBS:
+        BATCH_JOBS[ACTIVE_BATCH_ID]["status"] = "cancelled"
+        return {"ok": True, "message": "Đã gửi lệnh hủy tiến trình hàng loạt."}
+    return {"ok": True, "message": "Không có tiến trình hàng loạt nào đang chạy."}
 
 
 @app.get("/api/admin/jobs")

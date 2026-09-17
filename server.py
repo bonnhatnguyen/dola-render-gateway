@@ -599,22 +599,69 @@ async def _run_headful_login_job(name: str):
 
                 # Dismiss cookie banner and click login entry if needed
                 try:
-                    ok_btn = page.locator("button:has-text('OK'), text=OK").first
-                    if await ok_btn.count() and await ok_btn.is_visible():
-                        await ok_btn.click(timeout=2000)
+                    for sel in [
+                        "button:has-text('OK')",
+                        "[role='button']:has-text('OK')",
+                        "text=OK",
+                        "button:has-text('Accept')",
+                        "button:has-text('同意')",
+                    ]:
+                        cand = page.locator(sel).first
+                        if await cand.count() and await cand.is_visible():
+                            await cand.click(timeout=2000)
+                            break
                 except Exception:
                     pass
 
                 try:
-                    google_btn = page.locator("button:has-text('Googleで続ける'), text=Googleで続ける, text=Continue with Google").first
-                    if not (await google_btn.count() and await google_btn.is_visible()):
-                        for sel in ["text=ログイン", "text=Log in", "text=Sign in", "text=Đăng nhập", "button:has-text('Log in')"]:
-                            btn = page.locator(sel).first
-                            if await btn.count() and await btn.is_visible():
-                                await btn.click(timeout=2000)
-                                break
-                    await page.wait_for_timeout(1000)
-                    if await google_btn.count() and await google_btn.is_visible():
+                    headful_google_candidates = [
+                        "button:has-text('Googleで続ける')",
+                        "[role='button']:has-text('Googleで続ける')",
+                        "text=Googleで続ける",
+                        "button:has-text('Continue with Google')",
+                        "[role='button']:has-text('Continue with Google')",
+                        "text=Continue with Google",
+                        "button:has-text('Google')",
+                        "[role='button']:has-text('Google')",
+                    ]
+
+                    async def _find_headful_google():
+                        for sel in headful_google_candidates:
+                            try:
+                                cand = page.locator(sel).first
+                                if await cand.count() and await cand.is_visible():
+                                    return cand
+                            except Exception:
+                                continue
+                        return None
+
+                    google_btn = await _find_headful_google()
+                    if not google_btn:
+                        for sel in [
+                            "button:has-text('ログイン')",
+                            "[role='button']:has-text('ログイン')",
+                            "text=ログイン",
+                            "button:has-text('Log in')",
+                            "[role='button']:has-text('Log in')",
+                            "text=Log in",
+                            "button:has-text('Sign in')",
+                            "[role='button']:has-text('Sign in')",
+                            "text=Sign in",
+                            "button:has-text('Đăng nhập')",
+                            "[role='button']:has-text('Đăng nhập')",
+                            "text=Đăng nhập",
+                        ]:
+                            try:
+                                btn = page.locator(sel).first
+                                if await btn.count() and await btn.is_visible():
+                                    await btn.click(timeout=2000)
+                                    break
+                            except Exception:
+                                continue
+                        await page.wait_for_timeout(1200)
+                        google_btn = await _find_headful_google()
+
+                    if google_btn:
                         await google_btn.click(timeout=3000)
                 except Exception:
                     pass

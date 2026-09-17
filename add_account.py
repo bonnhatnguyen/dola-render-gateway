@@ -65,6 +65,7 @@ async def google_login(g, email: str, password: str, secret: str):
         for sel in ["#submit_button",
                     "[role='button']:has-text('続行')", "button:has-text('続行')",
                     "[role='button']:has-text('继续')", "button:has-text('继续')",
+                    "[role='button']:has-text('Tiếp tục')", "button:has-text('Tiếp tục')",
                     "[role='button']:has-text('Continue')", "button:has-text('Continue')"]:
             try:
                 loc = g.locator(sel).first
@@ -127,11 +128,23 @@ async def add_account_flow(account: str, email: str, password: str, secret: str)
 
             # Click login entry -> Google option
             try:
-                await page.wait_for_selector(".semi-modal-wrap", timeout=10000)
+                await page.wait_for_selector(".semi-modal-wrap", timeout=5000)
             except Exception:
-                await page.locator("text=ログイン").first.click(timeout=10000)
-                await page.wait_for_selector(".semi-modal-wrap", timeout=10000)
-            await page.locator("text=Googleで続ける").first.click(timeout=10000)
+                for sel in ["text=ログイン", "text=Log in", "text=Sign in", "text=Đăng nhập", "button:has-text('Log in')"]:
+                    loc = page.locator(sel).first
+                    if await loc.count() and await loc.is_visible():
+                        await loc.click(timeout=5000)
+                        break
+                try:
+                    await page.wait_for_selector(".semi-modal-wrap", timeout=8000)
+                except Exception:
+                    pass
+
+            for sel in ["text=Googleで続ける", "text=Continue with Google", "text=Tiếp tục với Google", "text=Google", "[data-track='login_google']"]:
+                loc = page.locator(sel).first
+                if await loc.count() and await loc.is_visible():
+                    await loc.click(timeout=5000)
+                    break
 
             # Google page may open in popup or active tab
             await page.wait_for_timeout(3000)

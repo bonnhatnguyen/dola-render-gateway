@@ -1037,8 +1037,8 @@ tr:hover td { background: var(--color-paper-hover); }
           <div class="wb-title">Danh Sách Tài Khoản Dola</div>
         </div>
         <div style="display:flex;gap:10px">
-          <button class="btn" onclick="openLoginAcc()">Đăng Nhập Google (Headful)</button>
-          <button class="btn btn-p" onclick="openAddAcc()">＋ Thêm Cookie JSON</button>
+          <button class="btn" onclick="openLoginAcc()">＋ Đăng Nhập Google (Tự Động / Thủ Công)</button>
+          <button class="btn btn-p" onclick="openAddAcc()">🍪 Thêm Cookie JSON</button>
         </div>
       </div>
 
@@ -1898,8 +1898,50 @@ async function submitAddAcc() {
 
 let googleLoginPolling = null;
 
+let currentLoginMode = 'auto';
+
+function switchLoginMode(mode) {
+  currentLoginMode = mode;
+  const isAuto = mode === 'auto';
+  const btnAuto = q('#pill_tab_auto');
+  const btnManual = q('#pill_tab_manual');
+  const viewAuto = q('#login_view_auto');
+  const viewManual = q('#login_view_manual');
+  const btnSubmit = q('#btnLoginStart');
+
+  if (btnAuto) {
+    btnAuto.className = isAuto ? 'btn btn-sm btn-p' : 'btn btn-sm';
+  }
+  if (btnManual) {
+    btnManual.className = !isAuto ? 'btn btn-sm btn-p' : 'btn btn-sm';
+  }
+  if (viewAuto) viewAuto.style.display = isAuto ? 'block' : 'none';
+  if (viewManual) viewManual.style.display = !isAuto ? 'block' : 'none';
+  if (btnSubmit) btnSubmit.textContent = isAuto ? '⚡ Bắt Đầu Tự Động Đăng Nhập' : '🚀 Mở Cửa Sổ Trình Duyệt';
+}
+
+function handleQuickPaste(val) {
+  val = (val || '').trim();
+  if (!val) return;
+  let parts = [];
+  if (val.includes('----')) parts = val.split('----');
+  else if (val.includes('|')) parts = val.split('|');
+  else if (val.includes('\t')) parts = val.split('\t');
+  else if (val.includes(':::')) parts = val.split(':::');
+  else if (val.includes(':') && val.split(':').length === 3) parts = val.split(':');
+
+  if (parts.length >= 2) {
+    if (q('#autoEmailInp')) q('#autoEmailInp').value = parts[0].trim();
+    if (q('#autoPassInp')) q('#autoPassInp').value = parts[1].trim();
+    if (parts.length >= 3 && q('#autoTotpInp')) q('#autoTotpInp').value = parts[2].trim();
+    toast('Đã trích xuất Email, Mật khẩu và Mã 2FA!', 'success');
+  }
+}
+
 function openLoginAcc() {
   if (googleLoginPolling) clearInterval(googleLoginPolling);
+  currentLoginMode = 'auto';
+
   const existingRows = document.querySelectorAll('#accountsTable tr td:first-child');
   const existingNames = Array.from(existingRows).map(el => el.textContent.trim());
   let nextIdx = 1;
@@ -1908,17 +1950,53 @@ function openLoginAcc() {
 
   q('#dlgBox').innerHTML = `
     <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
-      <h2 style="margin:0;display:flex;align-items:center;gap:8px">🌐 Đăng Nhập Google (Headful Browser)</h2>
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px">Đăng Nhập Tài Khoản Google</h2>
       <button class="btn btn-sm" onclick="closeLoginAccDialog()">✕</button>
     </div>
-    <p style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:14px">
-      Hệ thống sẽ khởi chạy một cửa sổ <b>Google Chrome</b> trực tiếp trên màn hình máy chủ/máy tính của bạn để bạn tự do thao tác đăng nhập Google vào <b>Dola</b>. Sau khi đăng nhập thành công, session sẽ tự động được lưu và tài khoản sẽ sẵn sàng render video.
-    </p>
+
+    <!-- Mode Selector Tabs -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;background:var(--color-paper-3);padding:4px;border-radius:var(--radius-md);border:1px solid var(--color-rule)">
+      <button type="button" class="btn btn-sm btn-p" id="pill_tab_auto" onclick="switchLoginMode('auto')" style="flex:1">⚡ Tự Động (Email + Mật Khẩu + 2FA)</button>
+      <button type="button" class="btn btn-sm" id="pill_tab_manual" onclick="switchLoginMode('manual')" style="flex:1">🌐 Thủ Công (Mở Chrome)</button>
+    </div>
 
     <div class="form-group" id="loginFormGroup">
       <div class="form-label"><span>Tên profile lưu tài khoản</span></div>
       <input id="loginAccNameInp" class="form-control" value="${esc(defaultName)}" placeholder="acc1">
       <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:4px">Định dạng tên: chỉ gồm chữ cái, số, dấu gạch dưới (VD: acc1, acc2, dola_user).</div>
+    </div>
+
+    <!-- Mode 1: Auto Login Form -->
+    <div id="login_view_auto">
+      <div class="form-group" style="background:var(--color-paper-3);padding:10px 12px;border:1px dashed var(--color-rule);border-radius:var(--radius-md);margin-bottom:14px">
+        <div class="form-label" style="margin-bottom:4px"><span style="font-size:12px;color:var(--color-accent);font-weight:600">📋 Dán nhanh chuỗi (VD: email----pass----2fa hoặc email|pass|2fa):</span></div>
+        <input id="quickPasteInp" class="form-control" style="font-size:12px;font-family:var(--font-mono)" placeholder="user@gmail.com----Password123----JBSWY3DPEHPK3PXP" oninput="handleQuickPaste(this.value)">
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><span>Email Google</span></div>
+        <input id="autoEmailInp" type="email" class="form-control" placeholder="user@gmail.com">
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><span>Mật khẩu Google</span></div>
+        <input id="autoPassInp" type="password" class="form-control" placeholder="••••••••">
+      </div>
+
+      <div class="form-group">
+        <div class="form-label"><span>Mã bí mật 2FA (TOTP Secret Key)</span></div>
+        <input id="autoTotpInp" class="form-control" style="font-family:var(--font-mono)" placeholder="JBSWY3DPEHPK3PXP">
+        <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:4px">
+          Khóa bí mật 16-32 ký tự lúc cài Google Authenticator (không phải mã 6 số OTP tạm thời). Hệ thống sẽ tự tính mã OTP theo thời gian thực.
+        </div>
+      </div>
+    </div>
+
+    <!-- Mode 2: Manual Browser Login Form -->
+    <div id="login_view_manual" style="display:none">
+      <p style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:12px">
+        Hệ thống sẽ mở một cửa sổ <b>Google Chrome</b> trực tiếp trên màn hình máy chủ/máy tính của bạn để bạn tự do thao tác đăng nhập Google vào <b>Dola</b>. Dành cho tài khoản cá nhân, xác minh qua số điện thoại hoặc app xác thực.
+      </p>
     </div>
 
     <div id="loginStatusBox" style="display:none;margin-top:14px;padding:14px;border-radius:var(--radius-md);background:var(--color-paper-3);border:1px solid var(--color-rule)">
@@ -1932,7 +2010,7 @@ function openLoginAcc() {
 
     <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
       <button class="btn" id="btnLoginCancel" onclick="closeLoginAccDialog()">Đóng</button>
-      <button class="btn btn-p" id="btnLoginStart" onclick="startGoogleLogin()">🚀 Mở Cửa Sổ Trình Duyệt</button>
+      <button class="btn btn-p" id="btnLoginStart" onclick="submitGoogleLogin()">⚡ Bắt Đầu Tự Động Đăng Nhập</button>
     </div>
   `;
   show('dlg');
@@ -1946,7 +2024,7 @@ function closeLoginAccDialog() {
   hide('dlg');
 }
 
-async function startGoogleLogin() {
+async function submitGoogleLogin() {
   const nameInp = q('#loginAccNameInp');
   const name = nameInp ? nameInp.value.trim() : '';
   if (!name) return toast('Vui lòng nhập tên tài khoản profile', 'error');
@@ -1959,79 +2037,140 @@ async function startGoogleLogin() {
   const spinner = q('#loginSpinner');
   const timerText = q('#loginTimerText');
 
-  btnStart.disabled = true;
-  if (nameInp) nameInp.disabled = true;
-  statusBox.style.display = 'block';
-  statusBox.style.background = 'var(--color-paper-3)';
-  statusBox.style.borderColor = 'var(--color-rule)';
-  spinner.style.display = 'inline-block';
-  statusTitle.textContent = 'Đang khởi chạy Chrome...';
-  statusTitle.style.color = 'var(--color-ink-1)';
-  statusDesc.innerHTML = 'Đang mở profile <code>accounts/' + esc(name) + '</code> và khởi động Chrome ở chế độ hiển thị (headful)...';
+  if (currentLoginMode === 'auto') {
+    const email = q('#autoEmailInp') ? q('#autoEmailInp').value.trim() : '';
+    const password = q('#autoPassInp') ? q('#autoPassInp').value.trim() : '';
+    const totp = q('#autoTotpInp') ? q('#autoTotpInp').value.trim() : '';
 
-  try {
-    await api('/api/admin/accounts/login-browser', {
-      method: 'POST',
-      body: JSON.stringify({ name })
-    });
+    if (!email) return toast('Vui lòng nhập Email Google', 'error');
+    if (!password) return toast('Vui lòng nhập Mật khẩu', 'error');
+    if (!totp) return toast('Vui lòng nhập mã bí mật 2FA (TOTP Secret Key)', 'error');
 
-    toast('Đã khởi chạy cửa sổ Chrome!', 'info');
-    statusTitle.textContent = 'Cửa sổ Chrome đã mở — Vui lòng đăng nhập Google';
-    statusDesc.innerHTML = '👉 Chuyển sang cửa sổ Chrome vừa xuất hiện trên màn hình và hoàn tất đăng nhập Google trên Dola.<br>⏳ Hệ thống đang tự động lắng nghe session đăng nhập...';
+    btnStart.disabled = true;
+    if (nameInp) nameInp.disabled = true;
+    statusBox.style.display = 'block';
+    statusBox.style.background = 'var(--color-paper-3)';
+    statusBox.style.borderColor = 'var(--color-rule)';
+    spinner.style.display = 'inline-block';
+    statusTitle.textContent = 'Đang tự động đăng nhập Google...';
+    statusTitle.style.color = 'var(--color-ink-1)';
+    statusDesc.innerHTML = 'Đang mở Chromium và tự động điền Email, Mật khẩu, tính mã 2FA... Trình duyệt sẽ tự hoàn tất và tự đóng.';
 
-    let elapsed = 0;
-    if (googleLoginPolling) clearInterval(googleLoginPolling);
-    googleLoginPolling = setInterval(async () => {
-      elapsed += 2;
-      if (timerText) timerText.textContent = `Thời gian theo dõi: ${elapsed}s (Tối đa 10 phút)`;
+    try {
+      await api('/api/admin/accounts', {
+        method: 'POST',
+        body: JSON.stringify({ name, email, password, totp })
+      });
+      toast('Đã kích hoạt tiến trình tự động đăng nhập!', 'info');
+      startPollingLoginStatus(name);
+    } catch (err) {
+      btnStart.disabled = false;
+      if (nameInp) nameInp.disabled = false;
+      spinner.style.display = 'none';
+      statusBox.style.background = 'var(--color-danger-subtle)';
+      statusBox.style.borderColor = 'var(--color-danger-border)';
+      statusTitle.textContent = 'Không thể bắt đầu đăng nhập';
+      statusTitle.style.color = 'var(--color-danger)';
+      statusDesc.innerHTML = `Lỗi: ${esc(err.message)}`;
+      toast(err.message, 'error');
+    }
+  } else {
+    btnStart.disabled = true;
+    if (nameInp) nameInp.disabled = true;
+    statusBox.style.display = 'block';
+    statusBox.style.background = 'var(--color-paper-3)';
+    statusBox.style.borderColor = 'var(--color-rule)';
+    spinner.style.display = 'inline-block';
+    statusTitle.textContent = 'Đang khởi chạy Chrome...';
+    statusTitle.style.color = 'var(--color-ink-1)';
+    statusDesc.innerHTML = 'Đang mở profile <code>accounts/' + esc(name) + '</code> và khởi động Chrome ở chế độ hiển thị (headful)...';
 
-      try {
-        const check = await api(`/api/admin/accounts/login-browser/status?name=${encodeURIComponent(name)}`);
-        if (check.status === 'success') {
-          clearInterval(googleLoginPolling);
-          googleLoginPolling = null;
-          spinner.style.display = 'none';
+    try {
+      await api('/api/admin/accounts/login-browser', {
+        method: 'POST',
+        body: JSON.stringify({ name })
+      });
+      toast('Đã khởi chạy cửa sổ Chrome!', 'info');
+      statusTitle.textContent = 'Cửa sổ Chrome đã mở — Vui lòng đăng nhập Google';
+      statusDesc.innerHTML = '👉 Chuyển sang cửa sổ Chrome vừa xuất hiện trên màn hình và hoàn tất đăng nhập Google trên Dola.<br>⏳ Hệ thống đang tự động lắng nghe session đăng nhập...';
+      startPollingLoginStatus(name);
+    } catch (err) {
+      btnStart.disabled = false;
+      if (nameInp) nameInp.disabled = false;
+      spinner.style.display = 'none';
+      statusBox.style.background = 'var(--color-danger-subtle)';
+      statusBox.style.borderColor = 'var(--color-danger-border)';
+      statusTitle.textContent = 'Không thể mở trình duyệt';
+      statusTitle.style.color = 'var(--color-danger)';
+      statusDesc.innerHTML = `Lỗi: ${esc(err.message)}`;
+      toast(err.message, 'error');
+    }
+  }
+}
+
+function startPollingLoginStatus(name) {
+  const btnStart = q('#btnLoginStart');
+  const btnCancel = q('#btnLoginCancel');
+  const statusBox = q('#loginStatusBox');
+  const statusTitle = q('#loginStatusTitle');
+  const statusDesc = q('#loginStatusDesc');
+  const spinner = q('#loginSpinner');
+  const timerText = q('#loginTimerText');
+  const nameInp = q('#loginAccNameInp');
+
+  let elapsed = 0;
+  if (googleLoginPolling) clearInterval(googleLoginPolling);
+  googleLoginPolling = setInterval(async () => {
+    elapsed += 2;
+    if (timerText) timerText.textContent = `Thời gian theo dõi: ${elapsed}s (Tối đa 10 phút)`;
+
+    try {
+      const check = await api(`/api/admin/accounts/login-browser/status?name=${encodeURIComponent(name)}`);
+      if (check.status === 'success') {
+        clearInterval(googleLoginPolling);
+        googleLoginPolling = null;
+        if (spinner) spinner.style.display = 'none';
+        if (statusBox) {
           statusBox.style.background = 'var(--color-success-subtle)';
           statusBox.style.borderColor = 'var(--color-success-border)';
+        }
+        if (statusTitle) {
           statusTitle.textContent = '✓ Đăng Nhập Google Thành Công!';
           statusTitle.style.color = 'var(--color-success)';
-          statusDesc.innerHTML = `Tài khoản <b>${esc(name)}</b> đã được cấp quyền và kích hoạt thành công vào Account Pool. Bạn đã có thể tạo video ngay!`;
-          btnStart.style.display = 'none';
-          btnCancel.textContent = 'Hoàn tất & Đóng';
-          toast(`Tài khoản ${name} đã đăng nhập thành công!`, 'success');
-          loadAccounts();
-          checkAccountWarning();
-        } else if (check.status === 'failed') {
-          clearInterval(googleLoginPolling);
-          googleLoginPolling = null;
-          spinner.style.display = 'none';
+        }
+        if (statusDesc) {
+          statusDesc.innerHTML = `Tài khoản <b>${esc(name)}</b> đã được xác thực và kích hoạt thành công vào Account Pool. Bạn đã có thể tạo video ngay!`;
+        }
+        if (btnStart) btnStart.style.display = 'none';
+        if (btnCancel) btnCancel.textContent = 'Hoàn tất & Đóng';
+        toast(`Tài khoản ${name} đã đăng nhập thành công!`, 'success');
+        loadAccounts();
+        checkAccountWarning();
+      } else if (check.status === 'failed') {
+        clearInterval(googleLoginPolling);
+        googleLoginPolling = null;
+        if (spinner) spinner.style.display = 'none';
+        if (statusBox) {
           statusBox.style.background = 'var(--color-danger-subtle)';
           statusBox.style.borderColor = 'var(--color-danger-border)';
+        }
+        if (statusTitle) {
           statusTitle.textContent = 'Đăng nhập không thành công';
           statusTitle.style.color = 'var(--color-danger)';
-          statusDesc.innerHTML = `Lỗi: ${esc(check.error || 'Trình duyệt bị đóng hoặc quá thời gian đăng nhập.')}`;
-          btnStart.disabled = false;
-          if (nameInp) nameInp.disabled = false;
-          btnCancel.textContent = 'Đóng';
-        } else if (check.message) {
-          statusDesc.innerHTML = esc(check.message);
         }
-      } catch (err) {
-        console.warn('Poll login status error:', err);
+        if (statusDesc) {
+          statusDesc.innerHTML = `Lỗi: ${esc(check.error || 'Trình duyệt bị đóng hoặc quá thời gian đăng nhập.')}`;
+        }
+        if (btnStart) btnStart.disabled = false;
+        if (nameInp) nameInp.disabled = false;
+        if (btnCancel) btnCancel.textContent = 'Đóng';
+      } else if (check.message && statusDesc) {
+        statusDesc.innerHTML = esc(check.message);
       }
-    }, 2000);
-
-  } catch (err) {
-    btnStart.disabled = false;
-    if (nameInp) nameInp.disabled = false;
-    spinner.style.display = 'none';
-    statusBox.style.background = 'var(--color-danger-subtle)';
-    statusBox.style.borderColor = 'var(--color-danger-border)';
-    statusTitle.textContent = 'Không thể mở trình duyệt';
-    statusTitle.style.color = 'var(--color-danger)';
-    statusDesc.innerHTML = `Lỗi: ${esc(err.message)}`;
-    toast(err.message, 'error');
-  }
+    } catch (err) {
+      console.warn('Poll login status error:', err);
+    }
+  }, 2000);
 }
 
 /* Tasks Tab */

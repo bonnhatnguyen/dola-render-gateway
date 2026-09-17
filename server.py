@@ -491,14 +491,28 @@ async def admin_account_verify(name: str, x_admin_key: str | None = Header(defau
 
 
 async def _run_add_job(name: str, email: str, password: str, totp: str):
-    JOBS[name] = {"kind": "add", "status": "running", "error": "", "started_at": time.time()}
+    JOBS[name] = {
+        "kind": "add",
+        "status": "running",
+        "error": "",
+        "started_at": time.time(),
+        "message": "Đang mở trình duyệt và tự động điền thông tin đăng nhập Google...",
+    }
     try:
         await add_account_flow(name, email, password, totp)
         pool.set_email(name, email)
         pool.set_login_status(name, True)
-        JOBS[name] = {**JOBS[name], "status": "success"}
+        JOBS[name] = {
+            **JOBS[name],
+            "status": "success",
+            "message": f"Tài khoản {name} đã tự động đăng nhập thành công!",
+        }
     except Exception as e:
-        JOBS[name] = {**JOBS[name], "status": "failed", "error": str(e)[:300]}
+        JOBS[name] = {
+            **JOBS[name],
+            "status": "failed",
+            "error": str(e)[:300],
+        }
 
 
 @app.post("/api/admin/accounts", status_code=202)

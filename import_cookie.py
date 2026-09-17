@@ -8,9 +8,67 @@ from browser_pool import BrowserPool
 import config
 
 
-def parse_cookie_json(data: dict | list) -> tuple[list[dict], dict, list[str]]:
-    """Normalizes cookie json from AccessHub Helper, Cookie-Editor, EditThisCookie, etc."""
-    cookies_in = data.get("cookies", []) if isinstance(data, dict) else data
+def parse_cookie_json(data: dict | list | str) -> tuple[list[dict], dict, list[str]]:
+    """Normalizes cookie data from JSON array, JSON object, Netscape format, or key-value string."""
+    dola_storage = {}
+    cookies_in = []
+
+    if isinstance(data, str):
+        s = data.strip()
+        if (s.startswith("{") and s.endswith("}")) or (s.startswith("[") and s.endswith("]")):
+            try:
+                parsed = json.loads(s)
+                return parse_cookie_json(parsed)
+            except Exception:
+                pass
+
+        # Try Netscape format
+        lines = [line.strip() for line in s.splitlines() if line.strip()]
+        for line in lines:
+            if line.startswith("# Netscape") or (line.startswith("#") and not line.startswith("#HttpOnly_")):
+                continue
+            is_http = False
+            if line.startswith("#HttpOnly_"):
+                is_http = True
+                line = line[len("#HttpOnly_"):]
+            parts = line.split("\t")
+            if len(parts) < 7:
+                parts = line.split()
+            if len(parts) >= 7:
+                cookies_in.append({
+                    "name": parts[5],
+                    "value": parts[6],
+                    "domain": parts[0],
+                    "path": parts[2],
+                    "secure": parts[3].upper() == "TRUE",
+                    "httpOnly": is_http,
+                    "expirationDate": parts[4],
+                })
+
+        # Try key-value header format: a=b; c=d
+        if not cookies_in:
+            for chunk in s.replace("\n", ";").split(";"):
+                chunk = chunk.strip()
+                if "=" in chunk:
+                    k, v = chunk.split("=", 1)
+                    if k.strip():
+                        cookies_in.append({
+                            "name": k.strip(),
+                            "value": v.strip(),
+                            "domain": ".dola.com",
+                            "path": "/",
+                            "secure": True,
+                        })
+    elif isinstance(data, dict):
+        if "cookies" in data and isinstance(data["cookies"], list):
+            cookies_in = data["cookies"]
+        else:
+            cookies_in = [{"name": k, "value": str(v)} for k, v in data.items() if isinstance(v, (str, int, float))]
+        storage = data.get("storageByOrigin", {}) if isinstance(data, dict) else {}
+        dola_storage = storage.get("https://www.dola.com", {}).get("localStorage", {})
+    elif isinstance(data, list):
+        cookies_in = data
+
     if not isinstance(cookies_in, list):
         raise ValueError("Invalid format: cookies list not found in JSON data")
 
@@ -51,13 +109,10 @@ def parse_cookie_json(data: dict | list) -> tuple[list[dict], dict, list[str]]:
         pw_cookies.append({**ss, "name": "sessionid"})
         cookie_str_parts.append(f"sessionid={ss['value']}")
 
-    storage = data.get("storageByOrigin", {}) if isinstance(data, dict) else {}
-    dola_storage = storage.get("https://www.dola.com", {}).get("localStorage", {})
-
     return pw_cookies, dola_storage, cookie_str_parts
 
 
-async def import_account_from_data(account_name: str, data: dict | list) -> dict:
+async def import_account_from_data(account_name: str, data: dict | list | str) -> dict:
     """Creates accounts/<account_name> and injects cookies and local storage."""
     pw_cookies, dola_storage, cookie_str_parts = parse_cookie_json(data)
     if not pw_cookies:
@@ -66,12 +121,20 @@ async def import_account_from_data(account_name: str, data: dict | list) -> dict
     profile_dir = Path("accounts") / account_name
     profile_dir.mkdir(parents=True, exist_ok=True)
 
+    from browser import LAUNCH_ARGS
+
     async with async_playwright() as p:
+        kwargs = {
+            "headless": True,
+            "args": LAUNCH_ARGS,
+            "locale": "ja-JP",
+            "timezone_id": "Asia/Tokyo",
+        }
+        if config.PROXY:
+            kwargs["proxy"] = {"server": config.PROXY}
         context = await p.chromium.launch_persistent_context(
             str(profile_dir),
-            headless=True,
-            locale="ja-JP",
-            timezone_id="Asia/Tokyo",
+            **kwargs,
         )
         await context.add_cookies(pw_cookies)
         await context.close()

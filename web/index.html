@@ -1103,6 +1103,8 @@ tr:hover td { background: var(--color-paper-hover); }
       <div class="cmd-item" onclick="execCmd(()=>switchTab('keys'))"><span>🔑 Quản lý API Keys</span><span class="kbd-shortcut">6</span></div>
       
       <div class="cmd-group-title" style="margin-top:8px">TÁC VỤ & HỖ TRỢ</div>
+      <div class="cmd-item" onclick="execCmd(openLoginAcc)"><span>🌐 Đăng Nhập Google (Headful Browser)</span></div>
+      <div class="cmd-item" onclick="execCmd(openAddAcc)"><span>🍪 Thêm Tài Khoản Bằng Cookie JSON</span></div>
       <div class="cmd-item" onclick="execCmd(openDonateModal)"><span>☕ Ủng Hộ Tác Giả (QR Vietcombank)</span></div>
       <div class="cmd-item" onclick="execCmd(openProxyModal)"><span>🌐 Hướng Dẫn Cấu Hình Proxy (.env.local)</span></div>
       <div class="cmd-item" onclick="execCmd(copyCurlSnippet)"><span>📋 Sao chép cURL mẫu cho lập trình viên</span></div>
@@ -1311,7 +1313,18 @@ async function api(path, opt = {}) {
   }
   if (!res.ok) {
     const err = await res.json().catch(() => ({ detail: res.statusText }));
-    throw new Error(err.detail || JSON.stringify(err));
+    let msg = '';
+    if (Array.isArray(err.detail)) {
+      msg = err.detail.map(d => {
+        const field = d.loc ? d.loc.filter(x => x !== 'body').join('.') : '';
+        return (field ? `${field}: ` : '') + (d.msg || JSON.stringify(d));
+      }).join('; ');
+    } else if (typeof err.detail === 'object' && err.detail !== null) {
+      msg = JSON.stringify(err.detail);
+    } else {
+      msg = err.detail || JSON.stringify(err);
+    }
+    throw new Error(msg || `Lỗi kết nối (${res.status})`);
   }
   return res.json();
 }
@@ -1817,19 +1830,30 @@ async function delAccount(name) {
 }
 
 function openAddAcc() {
+  const existingRows = document.querySelectorAll('#accountsTable tr td:first-child');
+  const existingNames = Array.from(existingRows).map(el => el.textContent.trim());
+  let nextIdx = 1;
+  while (existingNames.includes(`acc${nextIdx}`)) nextIdx++;
+  const defaultName = `acc${nextIdx}`;
+
   q('#dlgBox').innerHTML = `
-    <h2>Thêm Tài Khoản Mới</h2>
-    <div class="form-group">
-      <div class="form-label"><span>Tên định danh profile</span></div>
-      <input id="accNameInp" class="form-control" placeholder="dola_user_01">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px">🍪 Thêm Tài Khoản Bằng Cookie</h2>
+      <button class="btn btn-sm" onclick="hide('dlg')">✕</button>
     </div>
     <div class="form-group">
-      <div class="form-label"><span>Dán nội dung Cookie JSON hoặc Netscape</span></div>
-      <textarea id="accCookieInp" class="form-control" style="min-height:160px;font-family:var(--font-mono);font-size:12px" placeholder='[{"name": "session", "value": "..."}]'></textarea>
+      <div class="form-label"><span>Tên định danh profile</span></div>
+      <input id="accNameInp" class="form-control" value="${esc(defaultName)}" placeholder="acc1">
+      <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:4px">Định dạng tên: chỉ gồm chữ cái, số, dấu gạch dưới (VD: acc1, acc2, dola_user).</div>
+    </div>
+    <div class="form-group">
+      <div class="form-label"><span>Dán nội dung Cookie (JSON, Netscape txt, hoặc chuỗi cookie)</span></div>
+      <textarea id="accCookieInp" class="form-control" style="min-height:160px;font-family:var(--font-mono);font-size:12px" placeholder='[{"name": "sessionid", "value": "..."}] hoặc dán định dạng Netscape cookies.txt'></textarea>
+      <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:4px">Hỗ trợ JSON từ Cookie-Editor / EditThisCookie, file cookies.txt, hoặc chuỗi <code>sessionid=...; sessionid_ss=...</code>.</div>
     </div>
     <div style="display:flex;justify-content:flex-end;gap:8px;margin-top:16px">
       <button class="btn" onclick="hide('dlg')">Hủy</button>
-      <button class="btn btn-p" onclick="submitAddAcc()">Lưu Tài Khoản</button>
+      <button class="btn btn-p" id="btnSubmitAddAcc" onclick="submitAddAcc()">Lưu Tài Khoản</button>
     </div>
   `;
   show('dlg');
@@ -1839,41 +1863,174 @@ async function submitAddAcc() {
   const name = q('#accNameInp').value.trim();
   const raw = q('#accCookieInp').value.trim();
   if (!name) return toast('Vui lòng nhập tên profile', 'error');
-  if (!raw) return toast('Vui lòng nhập cookie', 'error');
+  if (!raw) return toast('Vui lòng nhập nội dung cookie', 'error');
 
-  let cookies = [];
+  let cookieData = raw;
   try {
-    cookies = JSON.parse(raw);
+    cookieData = JSON.parse(raw);
   } catch (e) {
-    return toast('Định dạng JSON cookie không hợp lệ', 'error');
+    cookieData = raw;
+  }
+
+  const btn = q('#btnSubmitAddAcc');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Đang lưu...';
   }
 
   try {
-    await api('/api/admin/accounts', {
+    const res = await api('/api/admin/accounts/import_cookie', {
       method: 'POST',
-      body: JSON.stringify({ name, cookies })
+      body: JSON.stringify({ name, data: cookieData })
     });
-    toast('Đã lưu tài khoản mới thành công!', 'success');
+    toast(`Đã lưu tài khoản ${name} thành công (${res.cookie_count || 0} cookies)!`, 'success');
     hide('dlg');
     loadAccounts();
     checkAccountWarning();
   } catch (e) {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Lưu Tài Khoản';
+    }
     toast(e.message, 'error');
   }
 }
 
-async function triggerGoogleLogin() {
-  const name = prompt('Nhập tên profile lưu đăng nhập Google (VD: google_acc_1):');
-  if (!name) return;
+let googleLoginPolling = null;
+
+function openLoginAcc() {
+  if (googleLoginPolling) clearInterval(googleLoginPolling);
+  const existingRows = document.querySelectorAll('#accountsTable tr td:first-child');
+  const existingNames = Array.from(existingRows).map(el => el.textContent.trim());
+  let nextIdx = 1;
+  while (existingNames.includes(`acc${nextIdx}`)) nextIdx++;
+  const defaultName = `acc${nextIdx}`;
+
+  q('#dlgBox').innerHTML = `
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <h2 style="margin:0;display:flex;align-items:center;gap:8px">🌐 Đăng Nhập Google (Headful Browser)</h2>
+      <button class="btn btn-sm" onclick="closeLoginAccDialog()">✕</button>
+    </div>
+    <p style="color:var(--color-ink-2);font-size:13px;line-height:1.6;margin-bottom:14px">
+      Hệ thống sẽ khởi chạy một cửa sổ <b>Google Chrome</b> trực tiếp trên màn hình máy chủ/máy tính của bạn để bạn tự do thao tác đăng nhập Google vào <b>Dola</b>. Sau khi đăng nhập thành công, session sẽ tự động được lưu và tài khoản sẽ sẵn sàng render video.
+    </p>
+
+    <div class="form-group" id="loginFormGroup">
+      <div class="form-label"><span>Tên profile lưu tài khoản</span></div>
+      <input id="loginAccNameInp" class="form-control" value="${esc(defaultName)}" placeholder="acc1">
+      <div style="font-size:11.5px;color:var(--color-ink-3);margin-top:4px">Định dạng tên: chỉ gồm chữ cái, số, dấu gạch dưới (VD: acc1, acc2, dola_user).</div>
+    </div>
+
+    <div id="loginStatusBox" style="display:none;margin-top:14px;padding:14px;border-radius:var(--radius-md);background:var(--color-paper-3);border:1px solid var(--color-rule)">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <span id="loginSpinner" class="spinner"></span>
+        <span id="loginStatusTitle" style="font-weight:700;font-size:13.5px;color:var(--color-ink-1)">Đang chuẩn bị...</span>
+      </div>
+      <div id="loginStatusDesc" style="font-size:12.5px;color:var(--color-ink-2);line-height:1.5"></div>
+      <div id="loginTimerText" style="font-size:11px;font-family:var(--font-mono);color:var(--color-ink-3);margin-top:8px"></div>
+    </div>
+
+    <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:18px">
+      <button class="btn" id="btnLoginCancel" onclick="closeLoginAccDialog()">Đóng</button>
+      <button class="btn btn-p" id="btnLoginStart" onclick="startGoogleLogin()">🚀 Mở Cửa Sổ Trình Duyệt</button>
+    </div>
+  `;
+  show('dlg');
+}
+
+function closeLoginAccDialog() {
+  if (googleLoginPolling) {
+    clearInterval(googleLoginPolling);
+    googleLoginPolling = null;
+  }
+  hide('dlg');
+}
+
+async function startGoogleLogin() {
+  const nameInp = q('#loginAccNameInp');
+  const name = nameInp ? nameInp.value.trim() : '';
+  if (!name) return toast('Vui lòng nhập tên tài khoản profile', 'error');
+
+  const btnStart = q('#btnLoginStart');
+  const btnCancel = q('#btnLoginCancel');
+  const statusBox = q('#loginStatusBox');
+  const statusTitle = q('#loginStatusTitle');
+  const statusDesc = q('#loginStatusDesc');
+  const spinner = q('#loginSpinner');
+  const timerText = q('#loginTimerText');
+
+  btnStart.disabled = true;
+  if (nameInp) nameInp.disabled = true;
+  statusBox.style.display = 'block';
+  statusBox.style.background = 'var(--color-paper-3)';
+  statusBox.style.borderColor = 'var(--color-rule)';
+  spinner.style.display = 'inline-block';
+  statusTitle.textContent = 'Đang khởi chạy Chrome...';
+  statusTitle.style.color = 'var(--color-ink-1)';
+  statusDesc.innerHTML = 'Đang mở profile <code>accounts/' + esc(name) + '</code> và khởi động Chrome ở chế độ hiển thị (headful)...';
+
   try {
     await api('/api/admin/accounts/login-browser', {
       method: 'POST',
       body: JSON.stringify({ name })
     });
-    hide('dlg');
-    toast('Đã kích hoạt cửa sổ Chrome đăng nhập!', 'info');
-  } catch (e) {
-    toast(e.message, 'error');
+
+    toast('Đã khởi chạy cửa sổ Chrome!', 'info');
+    statusTitle.textContent = 'Cửa sổ Chrome đã mở — Vui lòng đăng nhập Google';
+    statusDesc.innerHTML = '👉 Chuyển sang cửa sổ Chrome vừa xuất hiện trên màn hình và hoàn tất đăng nhập Google trên Dola.<br>⏳ Hệ thống đang tự động lắng nghe session đăng nhập...';
+
+    let elapsed = 0;
+    if (googleLoginPolling) clearInterval(googleLoginPolling);
+    googleLoginPolling = setInterval(async () => {
+      elapsed += 2;
+      if (timerText) timerText.textContent = `Thời gian theo dõi: ${elapsed}s (Tối đa 10 phút)`;
+
+      try {
+        const check = await api(`/api/admin/accounts/login-browser/status?name=${encodeURIComponent(name)}`);
+        if (check.status === 'success') {
+          clearInterval(googleLoginPolling);
+          googleLoginPolling = null;
+          spinner.style.display = 'none';
+          statusBox.style.background = 'var(--color-success-subtle)';
+          statusBox.style.borderColor = 'var(--color-success-border)';
+          statusTitle.textContent = '✓ Đăng Nhập Google Thành Công!';
+          statusTitle.style.color = 'var(--color-success)';
+          statusDesc.innerHTML = `Tài khoản <b>${esc(name)}</b> đã được cấp quyền và kích hoạt thành công vào Account Pool. Bạn đã có thể tạo video ngay!`;
+          btnStart.style.display = 'none';
+          btnCancel.textContent = 'Hoàn tất & Đóng';
+          toast(`Tài khoản ${name} đã đăng nhập thành công!`, 'success');
+          loadAccounts();
+          checkAccountWarning();
+        } else if (check.status === 'failed') {
+          clearInterval(googleLoginPolling);
+          googleLoginPolling = null;
+          spinner.style.display = 'none';
+          statusBox.style.background = 'var(--color-danger-subtle)';
+          statusBox.style.borderColor = 'var(--color-danger-border)';
+          statusTitle.textContent = 'Đăng nhập không thành công';
+          statusTitle.style.color = 'var(--color-danger)';
+          statusDesc.innerHTML = `Lỗi: ${esc(check.error || 'Trình duyệt bị đóng hoặc quá thời gian đăng nhập.')}`;
+          btnStart.disabled = false;
+          if (nameInp) nameInp.disabled = false;
+          btnCancel.textContent = 'Đóng';
+        } else if (check.message) {
+          statusDesc.innerHTML = esc(check.message);
+        }
+      } catch (err) {
+        console.warn('Poll login status error:', err);
+      }
+    }, 2000);
+
+  } catch (err) {
+    btnStart.disabled = false;
+    if (nameInp) nameInp.disabled = false;
+    spinner.style.display = 'none';
+    statusBox.style.background = 'var(--color-danger-subtle)';
+    statusBox.style.borderColor = 'var(--color-danger-border)';
+    statusTitle.textContent = 'Không thể mở trình duyệt';
+    statusTitle.style.color = 'var(--color-danger)';
+    statusDesc.innerHTML = `Lỗi: ${esc(err.message)}`;
+    toast(err.message, 'error');
   }
 }
 

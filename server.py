@@ -412,7 +412,11 @@ class AccountAdd(BaseModel):
 
 class CookieImportBody(BaseModel):
     name: str = "acc1"
-    data: dict | list
+    data: dict | list | str
+
+
+class LoginBrowserBody(BaseModel):
+    name: str = "acc1"
 
 
 class KeyCreate(BaseModel):
@@ -521,6 +525,152 @@ async def admin_account_import_cookie(body: CookieImportBody, x_admin_key: str |
         return res
     except Exception as e:
         raise HTTPException(400, f"Import failed: {str(e)}")
+
+
+async def _run_headful_login_job(name: str):
+    JOBS[name] = {
+        "kind": "headful_login",
+        "status": "running",
+        "error": "",
+        "message": "Đang khởi chạy trình duyệt Chrome...",
+        "started_at": time.time(),
+    }
+    profile_dir = Path("accounts") / name
+    profile_dir.mkdir(parents=True, exist_ok=True)
+
+    from patchright.async_api import async_playwright
+    from browser import LAUNCH_ARGS
+
+    try:
+        async with async_playwright() as p:
+            kwargs = {
+                "headless": False,
+                "args": LAUNCH_ARGS,
+                "locale": "ja-JP",
+                "timezone_id": "Asia/Tokyo",
+            }
+            if config.PROXY:
+                kwargs["proxy"] = {"server": config.PROXY}
+
+            context = await p.chromium.launch_persistent_context(str(profile_dir), **kwargs)
+            try:
+                page = context.pages[0] if context.pages else await context.new_page()
+                JOBS[name]["message"] = "Đang mở trang Dola, vui lòng đăng nhập Google trên cửa sổ Chrome..."
+                try:
+                    await page.goto("https://www.dola.com/chat", timeout=60000)
+                except Exception as e:
+                    print(f"[{name}] goto note: {e}", flush=True)
+
+                # Check if already logged in
+                cookies = await context.cookies("https://www.dola.com")
+                if any(c["name"] in ("sessionid", "sessionid_ss") and c.get("value") for c in cookies):
+                    pool._ensure_meta(name)
+                    pool.set_email(name, f"google_{name}")
+                    pool.set_login_status(name, True)
+                    JOBS[name] = {
+                        **JOBS[name],
+                        "status": "success",
+                        "message": "Tài khoản đã có session đăng nhập hợp lệ!",
+                    }
+                    await asyncio.sleep(2)
+                    return
+
+                # Try clicking login button if modal not visible
+                try:
+                    for sel in ["text=ログイン", "text=Log in", "text=Sign in", "text=Đăng nhập", "button:has-text('Log in')"]:
+                        btn = page.locator(sel).first
+                        if await btn.count() and await btn.is_visible():
+                            await btn.click(timeout=2000)
+                            break
+                except Exception:
+                    pass
+
+                # Monitor context cookies for up to 600s (10 min)
+                logged_in = False
+                for _ in range(300):
+                    await asyncio.sleep(2)
+                    if JOBS.get(name, {}).get("status") == "cancelled":
+                        return
+                    if not context.pages:
+                        break
+                    try:
+                        cookies = await context.cookies("https://www.dola.com")
+                        if any(c["name"] in ("sessionid", "sessionid_ss") and c.get("value") for c in cookies):
+                            logged_in = True
+                            c_parts = [f"{c['name']}={c['value']}" for c in cookies if c.get("value")]
+                            try:
+                                with open("cookies.txt", "a", encoding="utf-8") as f:
+                                    f.write("; ".join(c_parts) + "\n")
+                            except Exception:
+                                pass
+                            break
+                    except Exception:
+                        break
+
+                if logged_in:
+                    pool._ensure_meta(name)
+                    pool.set_email(name, f"google_{name}")
+                    pool.set_login_status(name, True)
+                    JOBS[name] = {
+                        **JOBS[name],
+                        "status": "success",
+                        "message": f"Đăng nhập thành công! Tài khoản {name} đã sẵn sàng trong Pool.",
+                    }
+                    await asyncio.sleep(3)
+                else:
+                    if JOBS.get(name, {}).get("status") == "cancelled":
+                        return
+                    JOBS[name] = {
+                        **JOBS[name],
+                        "status": "failed",
+                        "error": "Trình duyệt bị đóng hoặc quá thời gian chờ (10 phút) trước khi nhận được session đăng nhập.",
+                    }
+            finally:
+                try:
+                    await context.close()
+                except Exception:
+                    pass
+    except Exception as e:
+        JOBS[name] = {
+            **JOBS[name],
+            "status": "failed",
+            "error": f"Lỗi khởi chạy trình duyệt: {str(e)[:300]}",
+        }
+
+
+@app.post("/api/admin/accounts/login-browser")
+async def admin_account_login_browser(body: LoginBrowserBody, x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    if not NAME_RE.match(body.name):
+        raise HTTPException(400, "invalid account name (use letters, numbers, underscores)")
+    if JOBS.get(body.name, {}).get("status") == "running":
+        raise HTTPException(409, f"Tiến trình cho tài khoản '{body.name}' đang chạy")
+    asyncio.create_task(_run_headful_login_job(body.name))
+    return {"ok": True, "status": "running", "account": body.name}
+
+
+@app.get("/api/admin/accounts/login-browser/status")
+async def admin_account_login_browser_status(name: str, x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    job = JOBS.get(name)
+    if not job:
+        return {"status": "none", "account": name}
+    return {
+        "status": job.get("status", "none"),
+        "account": name,
+        "message": job.get("message", ""),
+        "error": job.get("error", ""),
+        "started_at": job.get("started_at", 0),
+    }
+
+
+@app.post("/api/admin/accounts/login-browser/cancel")
+async def admin_account_login_browser_cancel(body: LoginBrowserBody, x_admin_key: str | None = Header(default=None)):
+    _admin_auth(x_admin_key)
+    if body.name in JOBS and JOBS[body.name].get("status") == "running":
+        JOBS[body.name]["status"] = "cancelled"
+        JOBS[body.name]["message"] = "Đã hủy tiến trình đăng nhập."
+    return {"ok": True}
 
 
 @app.get("/api/admin/jobs")

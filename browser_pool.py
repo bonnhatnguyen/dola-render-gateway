@@ -10,7 +10,14 @@ from pathlib import Path
 
 from dola_client import CreditError
 from video_worker_ui import (
-    AccountLimitedError, CreditInsufficientError, RiskControlError, generate_video, resume_video,
+    AccountLimitedError,
+    ContentPolicyError,
+    CreditInsufficientError,
+    GenerationFailedError,
+    RiskControlError,
+    ServerBusyError,
+    generate_video,
+    resume_video,
 )
 import config
 
@@ -378,6 +385,17 @@ class BrowserPool:
                         self._conn.commit()
                         last_err = e
                         continue
+                    except ServerBusyError as e:
+                        print(f"[pool] {account} server busy, rotating: {e}", flush=True)
+                        last_err = e
+                        continue
+                    except GenerationFailedError as e:
+                        print(f"[pool] {account} generation failed, rotating: {e}", flush=True)
+                        last_err = e
+                        continue
+                    except ContentPolicyError as e:
+                        print(f"[pool] {account} content policy rejected prompt: {e}", flush=True)
+                        raise
                     except TimeoutError as e:
                         # Once conversation_id is assigned, task continues on Dola side;
                         # do not re-submit to prevent duplicate credit consumption.

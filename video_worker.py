@@ -54,14 +54,19 @@ async ({conversationId, msToken, fp}) => {
     }),
     credentials: "include",
   });
-  if (!resp.ok) return {ok: false, status: resp.status, texts: [], videos: []};
+  if (!resp.ok) return {ok: false, status: resp.status, texts: [], botTexts: [], videos: [], failures: [], hasCreationBlock: false};
 
   const data = await resp.json();
   const messages =
     (((data.downlink_body || {}).pull_singe_chain_downlink_body) || {}).messages || [];
   const texts = [];
+  const botTexts = [];
   const videos = [];
   const videoModels = [];
+  const failures = [];
+  let hasCreationBlock = false;
+  let creationProgress = null;
+
   for (const msg of messages) {
     let content = msg.content;
     if (typeof content === "string") {
@@ -70,11 +75,24 @@ async ({conversationId, msToken, fp}) => {
     if (!Array.isArray(content)) continue;
     for (const block of content) {
       const text = (((block.content || {}).text_block) || {}).text || "";
-      if (text) texts.push(text.slice(0, 120));
+      if (text) {
+        texts.push(text.slice(0, 300));
+        if (msg.sender_type !== 1) {
+          botTexts.push(text.slice(0, 300));
+        }
+      }
       if (block.block_type !== 2074) continue;
+      hasCreationBlock = true;
       const creations = (((block.content || {}).creation_block) || {}).creations || [];
       for (const cre of creations) {
         if (cre.type !== 2) continue;
+        if (cre.progress !== undefined) creationProgress = cre.progress;
+
+        if (cre.status === 3 || cre.status === 4 || cre.status === 5 || cre.fail_reason || cre.error_code || cre.err_code) {
+          const reason = cre.fail_reason || cre.err_msg || cre.error_msg || cre.error_code || cre.err_code || `Creation error (status ${cre.status})`;
+          failures.push(String(reason));
+        }
+
         const url = ((cre.video || {}).download_url) || "";
         if (url.startsWith("http")) {
           videos.push(url);
@@ -83,7 +101,17 @@ async ({conversationId, msToken, fp}) => {
       }
     }
   }
-  return {ok: true, status: resp.status, texts, videos, videoModels};
+  return {
+    ok: true,
+    status: resp.status,
+    texts,
+    botTexts,
+    videos,
+    videoModels,
+    failures,
+    hasCreationBlock,
+    creationProgress,
+  };
 }
 """
 
@@ -212,6 +240,9 @@ async def generate_video(account: str, prompt: str, ratio: str = "9:16",
                     continue
                 if not poll.get("ok"):
                     continue
+
+                if poll.get("failures"):
+                    raise RuntimeError(f"Dola creation error: {poll['failures'][0]}")
 
                 for text in poll.get("texts", []):
                     if CREDIT_FAIL_PATTERN.search(text):

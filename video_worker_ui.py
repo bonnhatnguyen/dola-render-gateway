@@ -24,6 +24,26 @@ DAILY_LIMIT_PATTERN = re.compile(
     re.IGNORECASE,
 )
 
+# Content policy / safety filter rejection patterns
+REJECTION_PATTERN = re.compile(
+    r"申し訳ありません|お答えできません|生成することができません|生成できません|"
+    r"利用規約|コンテンツポリシー|安全基準|倫理ガイドライン|不適切な表現|"
+    r"vi phạm|chính sách|tiêu chuẩn cộng đồng|nội dung nhạy cảm|không thể tạo|không thể sinh|không phù hợp|từ chối yêu cầu|"
+    r"violat|content policy|community guideline|safety guideline|sensitive content|"
+    r"unable to (?:generate|create)|cannot (?:generate|create)|against our policy|refuse to|inappropriate|"
+    r"违反|违规|社区准则|敏感词|安全策略|无法生成|不能生成",
+    re.IGNORECASE,
+)
+
+# Server busy / overload / temporary error patterns
+SERVER_BUSY_PATTERN = re.compile(
+    r"サーバーが混み合って|しばらくしてからもう一度|システムエラー|エラーが発生|"
+    r"server is busy|too many requests|try again later|system busy|service unavailable|"
+    r"服务器繁忙|请稍后重试|系统繁忙|生成失败|网络异常|"
+    r"máy chủ quá tải|máy chủ đang bận|hệ thống bận|quá nhiều yêu cầu|vui lòng thử lại sau|lỗi hệ thống",
+    re.IGNORECASE,
+)
+
 
 class AccountLimitedError(Exception):
     """Account reached daily video generation limit."""
@@ -31,6 +51,18 @@ class AccountLimitedError(Exception):
 
 class CreditInsufficientError(Exception):
     """Insufficient points prior to generation."""
+
+
+class ContentPolicyError(Exception):
+    """Dola safety/moderation policy rejected the prompt."""
+
+
+class ServerBusyError(Exception):
+    """Dola server is congested or temporarily unavailable."""
+
+
+class GenerationFailedError(Exception):
+    """Dola creation block failed or bot did not initiate video."""
 
 
 VIDEO_BTN = "text=動画を作成"          # Entry point button in ja-JP locale
@@ -281,7 +313,7 @@ async def _preflight_balance(page, ms_token: str, fp: str, required: int) -> dic
 
 async def poll_conversation(account: str, page, context, conversation_id: str,
                             timeout: int, on_poll=None, on_balance=None) -> dict:
-    """Polls accepted conversation for video completion."""
+    """Polls accepted conversation for video completion with fail-fast detection."""
     cookies = await context.cookies("https://www.dola.com")
     ms_token, fp = cookie_value(cookies, "msToken"), cookie_value(cookies, "s_v_web_id")
     start = time.time()
@@ -295,17 +327,40 @@ async def poll_conversation(account: str, page, context, conversation_id: str,
             print(f"  Polling exception: {e}", flush=True)
             continue
         now = time.time()
+        elapsed = int(now - start)
         if on_poll and now - last_callback >= 30:
             on_poll(now)
             last_callback = now
+
+        # 1. Early fail on explicit creation block failure
+        failures = poll.get("failures", [])
+        if failures:
+            raise GenerationFailedError(f"Lỗi tạo video phía Dola: {failures[0]}")
+
+        # 2. Check text responses for quota, policy rejection, or server errors
         for text in poll.get("texts", []):
             balance, _, source = _parse_balance_texts([text])
             if balance is not None and on_balance:
                 on_balance(balance, source)
             if DAILY_LIMIT_PATTERN.search(text):
-                raise AccountLimitedError(f"Account daily limit reached: {text[:120]}")
+                raise AccountLimitedError(f"Tài khoản đã đạt giới hạn ngày: {text[:120]}")
             if CREDIT_FAIL_PATTERN.search(text):
-                raise CreditError(f"Insufficient quota: {text[:80]}")
+                raise CreditError(f"Không đủ hạn mức/điểm: {text[:80]}")
+            if REJECTION_PATTERN.search(text):
+                raise ContentPolicyError(f"Dola từ chối prompt do vi phạm an toàn/chính sách: {text[:160]}")
+            if SERVER_BUSY_PATTERN.search(text):
+                raise ServerBusyError(f"Máy chủ Dola đang quá tải / bận: {text[:120]}")
+
+        # 3. Detect conversational bot response without video block (fail-fast within 20s)
+        if elapsed >= 20 and not poll.get("hasCreationBlock") and poll.get("botTexts"):
+            bot_reply = poll["botTexts"][-1]
+            if REJECTION_PATTERN.search(bot_reply):
+                raise ContentPolicyError(f"Dola từ chối prompt: {bot_reply[:160]}")
+            if SERVER_BUSY_PATTERN.search(bot_reply):
+                raise ServerBusyError(f"Máy chủ Dola quá tải: {bot_reply[:120]}")
+            raise GenerationFailedError(f"Dola không tạo video (Bot phản hồi: '{bot_reply[:150]}')")
+
+        # 4. Check for completed video
         if poll.get("videos"):
             video_models = poll.get("videoModels", [])
             url = extract_unwatermarked_url(
@@ -315,8 +370,11 @@ async def poll_conversation(account: str, page, context, conversation_id: str,
             print(f"[{account}] Downloaded {local} ({local.stat().st_size / 1e6:.1f} MB)", flush=True)
             return {"video_url": url, "local_path": str(local),
                     "conversation_id": conversation_id, "account": account}
-        print(f"  ...Generating ({int(time.time() - start)}s)", flush=True)
-    raise TimeoutError(f"No video generated within {timeout}s (conversation_id={conversation_id})")
+
+        prog = poll.get("creationProgress")
+        prog_str = f" [tiến độ {prog}%]" if prog is not None else ""
+        print(f"  ...Generating{prog_str} ({elapsed}s)", flush=True)
+    raise TimeoutError(f"Không nhận được video trong {timeout}s (conversation_id={conversation_id})")
 
 
 async def resume_video(account: str, conversation_id: str, timeout: int,
@@ -355,6 +413,8 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
     # 30s videos require extended generation timeout
     if duration == 30:
         timeout = max(timeout, 1800)
+    if model_key == "seedance_v2.5":
+        timeout = max(timeout, 600)
     if reference_image_paths:
         timeout = max(timeout, config.REFERENCE_VIDEO_TIMEOUT)
     async with async_playwright() as p:
@@ -429,10 +489,53 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
                         await page.click(f"text={duration}s", timeout=3000)
                     except Exception as e:
                         print(f"  (Failed to set duration, using default: {str(e)[:80]})", flush=True)
+
             box = await page.query_selector("textarea") or await page.query_selector('[contenteditable="true"]')
+            if not box:
+                raise RuntimeError("Không tìm thấy ô nhập prompt trên giao diện Dola")
             await box.click()
-            await page.keyboard.type(prompt, delay=100)
-            await page.wait_for_timeout(600)
+            await page.wait_for_timeout(150)
+
+            # Fast paste / insert prompt (instant instead of character-by-character 100ms delay)
+            try:
+                await page.evaluate("""async (text) => {
+                    try {
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            await navigator.clipboard.writeText(text);
+                            return true;
+                        }
+                    } catch (e) {}
+                    return false;
+                }""", prompt)
+                await page.keyboard.press("Control+v")
+                await page.wait_for_timeout(200)
+            except Exception:
+                pass
+
+            content_in_box = await page.evaluate(
+                """(el) => (el.value || el.innerText || el.textContent || '').trim()""", box
+            )
+            if not content_in_box:
+                try:
+                    await page.keyboard.insert_text(prompt)
+                    await page.wait_for_timeout(200)
+                except Exception:
+                    pass
+
+            content_in_box = await page.evaluate(
+                """(el) => (el.value || el.innerText || el.textContent || '').trim()""", box
+            )
+            if not content_in_box:
+                try:
+                    tag = await box.evaluate("(el) => el.tagName.toLowerCase()")
+                    if tag in ("textarea", "input"):
+                        await box.fill(prompt)
+                    else:
+                        await page.keyboard.type(prompt, delay=1)
+                except Exception:
+                    await page.keyboard.type(prompt, delay=2)
+
+            await page.wait_for_timeout(400)
             await page.keyboard.press("Enter")
             print(f"[{account}] UI submitted prompt: {prompt[:40]}", flush=True)
 
@@ -461,12 +564,19 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
 
             # ---- Wait for real conversation_id ----
             conv_id = ""
-            for _ in range(30):
+            for step_i in range(30):
                 await page.wait_for_timeout(1000)
                 tail = page.url.rstrip("/").split("/")[-1]
                 if tail.isdigit():
                     conv_id = tail
                     break
+                if step_i == 4 and not conv_id:
+                    try:
+                        send_btn = page.locator('button[type="submit"], [aria-label*="send" i], [aria-label*="Send" i], button:has(svg)').last
+                        if await send_btn.count() and await send_btn.is_visible():
+                            await send_btn.click(timeout=1000)
+                    except Exception:
+                        pass
             if not conv_id:
                 await page.screenshot(path="no_conv.png")
                 raise TimeoutError("conversation_id not acquired within 30s")

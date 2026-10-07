@@ -45,7 +45,7 @@ call .venv\Scripts\activate.bat
 
 :: 3. Kiem tra va cai dat dependencies
 echo [3/5] Kiem tra thu vien phu thuoc (requirements)...
-python -c "import fastapi, uvicorn, patchright, PIL, cv2" >nul 2>&1
+python -c "import fastapi, uvicorn, patchright, PIL, cv2, multipart" >nul 2>&1
 if !errorlevel! neq 0 (
     echo    -^> Dang cai dat dependencies tu requirements.txt...
     call python -m pip install -r requirements.txt

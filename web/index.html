@@ -1578,6 +1578,15 @@ function addLocalFiles(fileList) {
   }
 }
 
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = error => reject(error);
+    reader.readAsDataURL(file);
+  });
+}
+
 function addRefImage() {
   const input = q('#gen_ref_input');
   if (!input) return;
@@ -1721,23 +1730,56 @@ async function submitGenerateVideo() {
     const localItems = referenceImagesList.filter(i => (typeof i === 'object' && i.file && !i.url));
     if (localItems.length > 0) {
       q('#gen_status_text').textContent = `Đang tải ${localItems.length} ảnh từ máy tính lên server theo thứ tự...`;
-      const formData = new FormData();
-      for (const item of localItems) {
-        formData.append('files', item.file, item.name);
+      let upData = null;
+      let uploadErr = null;
+      try {
+        const formData = new FormData();
+        for (const item of localItems) {
+          formData.append('files', item.file, item.name);
+        }
+        const upResp = await fetch('/api/upload-reference-images', {
+          method: 'POST',
+          body: formData
+        });
+        if (upResp.ok) {
+          upData = await upResp.json();
+        } else {
+          const errJson = await upResp.json().catch(() => ({}));
+          uploadErr = errJson.detail || `Server báo lỗi HTTP ${upResp.status}`;
+        }
+      } catch (e) {
+        uploadErr = e.message || 'Lỗi kết nối khi tải ảnh';
       }
-      const upResp = await fetch('/api/upload-reference-images', {
-        method: 'POST',
-        body: formData
-      });
-      if (!upResp.ok) {
-        const errJson = await upResp.json().catch(() => ({}));
-        throw new Error(errJson.detail || 'Lỗi khi tải ảnh từ máy tính lên server');
+
+      // Dự phòng: Nếu multipart tải không thành công, tự động chuyển đổi sang Base64
+      if (!upData) {
+        q('#gen_status_text').textContent = `Đang tải ${localItems.length} ảnh bằng chế độ dự phòng (Base64)...`;
+        try {
+          const b64List = [];
+          for (const item of localItems) {
+            const b64 = await fileToBase64(item.file);
+            b64List.push({ name: item.name, data: b64 });
+          }
+          const upResp2 = await fetch('/api/upload-reference-images', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ images: b64List })
+          });
+          if (upResp2.ok) {
+            upData = await upResp2.json();
+          } else {
+            const errJson2 = await upResp2.json().catch(() => ({}));
+            throw new Error(errJson2.detail || uploadErr || 'Lỗi khi tải ảnh từ máy tính lên server');
+          }
+        } catch (e2) {
+          throw new Error(e2.message || uploadErr || 'Lỗi khi tải ảnh từ máy tính lên server');
+        }
       }
-      const upData = await upResp.json();
+
       let upIdx = 0;
       for (const item of referenceImagesList) {
         if (typeof item === 'object' && item.file && !item.url) {
-          if (upData.images && upData.images[upIdx]) {
+          if (upData && upData.images && upData.images[upIdx]) {
             item.url = upData.images[upIdx].url;
             upIdx++;
           }

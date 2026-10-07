@@ -33,6 +33,7 @@ from io import BytesIO
 from pathlib import Path
 
 from fastapi import FastAPI, File, Header, HTTPException, Request, Response, UploadFile
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -49,6 +50,14 @@ Path("web").mkdir(parents=True, exist_ok=True)
 Path("uploads").mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="dola-pool", version="0.4.0")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 store = TaskStore(config.DB_PATH)
 pool = BrowserPool(max_concurrency=config.MAX_CONCURRENCY)
@@ -315,7 +324,16 @@ async def upload_reference_images_endpoint(request: Request):
     upload_dir.mkdir(parents=True, exist_ok=True)
 
     if "multipart/form-data" in content_type:
-        form = await request.form()
+        try:
+            form = await request.form()
+        except AssertionError as exc:
+            raise HTTPException(
+                500,
+                "Thư viện 'python-multipart' chưa được cài đặt. Vui lòng cài đặt bằng lệnh: pip install python-multipart"
+            ) from exc
+        except Exception as exc:
+            raise HTTPException(400, f"Lỗi đọc dữ liệu ảnh tải lên: {str(exc)}") from exc
+
         file_list = form.getlist("files") or form.getlist("images")
         if not file_list:
             file_list = [v for k, v in form.multi_items() if isinstance(v, UploadFile)]

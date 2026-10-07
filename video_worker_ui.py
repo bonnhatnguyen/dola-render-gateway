@@ -28,6 +28,9 @@ DAILY_LIMIT_PATTERN = re.compile(
 REJECTION_PATTERN = re.compile(
     r"申し訳ありません|お答えできません|生成することができません|生成できません|"
     r"利用規約|コンテンツポリシー|安全基準|倫理ガイドライン|不適切な表現|"
+    r"肖像保護|実在する人物|実在の人物|肖像権|人物の画像|"
+    r"肖像保护|实存在人物|真实人物|真人照片|"
+    r"portrait protection|real person|likeness protection|"
     r"vi phạm|chính sách|tiêu chuẩn cộng đồng|nội dung nhạy cảm|không thể tạo|không thể sinh|không phù hợp|từ chối yêu cầu|"
     r"violat|content policy|community guideline|safety guideline|sensitive content|"
     r"unable to (?:generate|create)|cannot (?:generate|create)|against our policy|refuse to|inappropriate|"
@@ -373,14 +376,22 @@ async def poll_conversation(account: str, page, context, conversation_id: str,
             if SERVER_BUSY_PATTERN.search(text):
                 raise ServerBusyError(f"Máy chủ Dola đang quá tải / bận: {text[:120]}")
 
-        # 3. Detect conversational bot response without video block (fail-fast within 20s)
-        if elapsed >= 20 and not poll.get("hasCreationBlock") and poll.get("botTexts"):
-            bot_reply = poll["botTexts"][-1]
-            if REJECTION_PATTERN.search(bot_reply):
-                raise ContentPolicyError(f"Dola từ chối prompt: {bot_reply[:160]}")
-            if SERVER_BUSY_PATTERN.search(bot_reply):
-                raise ServerBusyError(f"Máy chủ Dola quá tải: {bot_reply[:120]}")
-            raise GenerationFailedError(f"Dola không tạo video (Bot phản hồi: '{bot_reply[:150]}')")
+        # 3. Detect conversational bot response without video block
+        all_bot_text = " ".join(poll.get("botTexts", []))
+        if all_bot_text:
+            if REJECTION_PATTERN.search(all_bot_text):
+                raise ContentPolicyError(f"Dola từ chối (chính sách an toàn / chân dung): {all_bot_text[:180]}")
+            if SERVER_BUSY_PATTERN.search(all_bot_text):
+                raise ServerBusyError(f"Máy chủ Dola quá tải: {all_bot_text[:120]}")
+
+        # If after 35s there is no creation block
+        if elapsed >= 35 and not poll.get("hasCreationBlock") and poll.get("botTexts"):
+            # If bot says '生成された動画', generation was accepted; give up to 90s for creation block
+            if "生成された動画" in all_bot_text or "動画を生成" in all_bot_text:
+                if elapsed >= 90:
+                    raise GenerationFailedError(f"Dola chưa tạo video block sau 90s: '{poll['botTexts'][-1][:150]}'")
+            else:
+                raise GenerationFailedError(f"Dola không tạo video (Bot phản hồi: '{poll['botTexts'][-1][:150]}')")
 
         # 4. Check for completed video
         if poll.get("videos"):

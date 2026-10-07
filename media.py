@@ -1,5 +1,6 @@
 """Public reference media download and security validation (SSRF protected)."""
 import asyncio
+import base64
 import ipaddress
 import socket
 import tempfile
@@ -74,16 +75,49 @@ async def _validate_url_async(url: str) -> str:
     return url
 
 
+def _get_local_reference_path(raw: str) -> Path | None:
+    """Checks if reference string refers to a local uploaded image file."""
+    s = str(raw).strip()
+    if s.startswith("/uploads/"):
+        candidate = Path("uploads") / s[len("/uploads/"):]
+        if candidate.is_file():
+            return candidate
+    elif s.startswith("uploads/") or s.startswith("uploads\\"):
+        candidate = Path(s)
+        if candidate.is_file():
+            return candidate
+    elif "://127.0.0.1:" in s or "://localhost:" in s or "://0.0.0.0:" in s:
+        parsed = urlparse(s)
+        if parsed.path.startswith("/uploads/"):
+            candidate = Path("uploads") / parsed.path[len("/uploads/"):]
+            if candidate.is_file():
+                return candidate
+    elif Path(s).is_file():
+        return Path(s)
+    return None
+
+
 async def validate_reference_urls(urls: list[str]) -> list[str]:
+    """Validates public URLs, local files, and base64 data URIs while preserving exact order."""
     if len(urls) > config.REFERENCE_IMAGE_MAX_COUNT:
-        raise ValueError(f"Maximum of {config.REFERENCE_IMAGE_MAX_COUNT} reference images allowed")
+        raise ValueError(f"Tối đa {config.REFERENCE_IMAGE_MAX_COUNT} ảnh tham chiếu được phép")
     normalized = []
-    seen = set()
     for raw in urls:
-        url = await _validate_url_async(raw)
-        if url not in seen:
-            normalized.append(url)
-            seen.add(url)
+        if not isinstance(raw, str) or not raw.strip():
+            continue
+        item = raw.strip()
+        # 1. Base64 data URI
+        if item.startswith("data:image/"):
+            normalized.append(item)
+            continue
+        # 2. Local uploads file or direct file path
+        local_p = _get_local_reference_path(item)
+        if local_p:
+            normalized.append(str(local_p.resolve()))
+            continue
+        # 3. Public HTTP/HTTPS URL
+        url = await _validate_url_async(item)
+        normalized.append(url)
     return normalized
 
 
@@ -144,17 +178,66 @@ async def download_one_image(session: aiohttp.ClientSession, url: str, dest: Pat
     raise ValueError(str(last_error) if last_error else "Failed to download reference image")
 
 
+async def _process_reference_item(session: aiohttp.ClientSession, item: str, dest_base: Path) -> Path:
+    """Processes a single reference item (local file, base64 data URI, or public URL) to local destination."""
+    item_str = str(item).strip()
+
+    # 1. Base64 Data URI
+    if item_str.startswith("data:image/"):
+        header, b64_part = item_str.split(",", 1) if "," in item_str else ("", item_str)
+        try:
+            data = base64.b64decode(b64_part)
+        except Exception as exc:
+            raise ValueError("Không thể giải mã dữ liệu ảnh Base64") from exc
+        if len(data) > config.REFERENCE_IMAGE_MAX_BYTES:
+            raise ValueError(f"Ảnh tham chiếu vượt quá giới hạn {config.REFERENCE_IMAGE_MAX_BYTES // (1024 * 1024)}MB")
+        try:
+            with Image.open(BytesIO(data)) as img:
+                img.verify()
+                fmt = img.format
+        except Exception as exc:
+            raise ValueError("Ảnh tham chiếu Base64 không hợp lệ") from exc
+        if fmt not in _ALLOWED_IMAGE_FORMATS:
+            raise ValueError("Ảnh tham chiếu chỉ hỗ trợ định dạng JPEG, PNG, WEBP")
+        dest = dest_base.with_suffix(_ALLOWED_IMAGE_FORMATS[fmt])
+        dest.write_bytes(data)
+        return dest
+
+    # 2. Local uploads file or local file path
+    local_p = _get_local_reference_path(item_str)
+    if local_p and local_p.is_file():
+        data = local_p.read_bytes()
+        if len(data) > config.REFERENCE_IMAGE_MAX_BYTES:
+            raise ValueError(f"Ảnh tham chiếu vượt quá giới hạn {config.REFERENCE_IMAGE_MAX_BYTES // (1024 * 1024)}MB")
+        try:
+            with Image.open(BytesIO(data)) as img:
+                img.verify()
+                fmt = img.format
+        except Exception as exc:
+            raise ValueError("File ảnh cục bộ không hợp lệ") from exc
+        if fmt not in _ALLOWED_IMAGE_FORMATS:
+            raise ValueError("Ảnh tham chiếu chỉ hỗ trợ định dạng JPEG, PNG, WEBP")
+        dest = dest_base.with_suffix(_ALLOWED_IMAGE_FORMATS[fmt])
+        dest.write_bytes(data)
+        return dest
+
+    # 3. Public URL
+    return await download_one_image(session, item_str, dest_base)
+
+
 async def download_reference_images(urls: list[str], task_id: str) -> tuple[Path | None, list[str]]:
-    """Downloads reference images to temp folder, returns (root_dir, local_paths). Caller must cleanup."""
+    """Prepares reference images in temp folder, preserving exact user-chosen order. Caller must cleanup."""
     urls = await validate_reference_urls(urls)
     if not urls:
         return None, []
     root = Path(tempfile.mkdtemp(prefix=f"dola_ref_{task_id}_"))
     try:
+        paths = []
         async with aiohttp.ClientSession() as session:
-            paths = []
-            for index, url in enumerate(urls):
-                paths.append(str(await download_one_image(session, url, root / f"image_{index}")))
+            for index, item in enumerate(urls):
+                dest_base = root / f"image_{index:03d}"
+                saved = await _process_reference_item(session, item, dest_base)
+                paths.append(str(saved.resolve()))
         return root, paths
     except Exception:
         for child in root.glob("*"):

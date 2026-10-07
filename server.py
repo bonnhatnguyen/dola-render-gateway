@@ -21,6 +21,7 @@ if sys.platform == "win32":
         uvicorn.loops.asyncio.asyncio_loop_factory = lambda use_subprocess=False: asyncio.ProactorEventLoop
     except Exception:
         pass
+import base64
 import hashlib
 import json
 import re
@@ -28,12 +29,14 @@ import shutil
 import time
 import uuid
 from collections import defaultdict
+from io import BytesIO
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Response
+from fastapi import FastAPI, File, Header, HTTPException, Request, Response, UploadFile
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from PIL import Image
 
 import config
 from add_account import add_account_flow
@@ -43,6 +46,7 @@ from store import PendingTaskLimitExceeded, TaskQuotaExceeded, TaskStore
 
 Path(config.DOWNLOAD_DIR).mkdir(parents=True, exist_ok=True)
 Path("web").mkdir(parents=True, exist_ok=True)
+Path("uploads").mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="dola-pool", version="0.4.0")
 
@@ -50,6 +54,7 @@ store = TaskStore(config.DB_PATH)
 pool = BrowserPool(max_concurrency=config.MAX_CONCURRENCY)
 
 app.mount("/videos", StaticFiles(directory=config.DOWNLOAD_DIR), name="videos")
+app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # Background jobs (add/verify), in-memory
 JOBS: dict[str, dict] = {}
@@ -299,6 +304,77 @@ async def resume_incomplete_tasks():
             row["id"], row["model"], row["prompt"], ratio, row["duration"],
             _task_reference_images(row.get("reference_images")), _task_client(row),
         ))
+
+
+@app.post("/api/upload-reference-images")
+async def upload_reference_images_endpoint(request: Request):
+    """Uploads multiple reference images from computer, strictly preserving order."""
+    content_type = request.headers.get("content-type", "")
+    saved_items = []
+    upload_dir = Path("uploads")
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        file_list = form.getlist("files") or form.getlist("images")
+        if not file_list:
+            file_list = [v for k, v in form.multi_items() if isinstance(v, UploadFile)]
+        
+        for idx, upload in enumerate(file_list):
+            data = await upload.read()
+            if not data:
+                continue
+            if len(data) > config.REFERENCE_IMAGE_MAX_BYTES:
+                raise HTTPException(400, f"File {upload.filename or idx+1} vượt quá giới hạn 15MB")
+            try:
+                with Image.open(BytesIO(data)) as img:
+                    img.verify()
+                    fmt = img.format
+            except Exception:
+                raise HTTPException(400, f"File {upload.filename or idx+1} không phải là định dạng ảnh hợp lệ")
+
+            suffix = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}.get(fmt, ".jpg")
+            filename = f"ref_{int(time.time()*1000)}_{idx:03d}_{uuid.uuid4().hex[:6]}{suffix}"
+            dest = upload_dir / filename
+            dest.write_bytes(data)
+            saved_items.append({
+                "original_name": upload.filename or f"image_{idx+1}",
+                "url": f"/uploads/{filename}",
+                "path": str(dest.resolve()),
+                "size": len(data),
+            })
+    else:
+        body = await request.json()
+        images = body.get("images", [])
+        for idx, item in enumerate(images):
+            raw_b64 = item.get("data", "")
+            if "," in raw_b64:
+                raw_b64 = raw_b64.split(",", 1)[1]
+            try:
+                data = base64.b64decode(raw_b64)
+            except Exception:
+                raise HTTPException(400, f"Ảnh thứ {idx+1} không thể giải mã Base64")
+            if len(data) > config.REFERENCE_IMAGE_MAX_BYTES:
+                raise HTTPException(400, f"Ảnh thứ {idx+1} vượt quá giới hạn 15MB")
+            try:
+                with Image.open(BytesIO(data)) as img:
+                    img.verify()
+                    fmt = img.format
+            except Exception:
+                raise HTTPException(400, f"Ảnh thứ {idx+1} không phải là định dạng ảnh hợp lệ")
+
+            suffix = {"JPEG": ".jpg", "PNG": ".png", "WEBP": ".webp"}.get(fmt, ".jpg")
+            filename = f"ref_{int(time.time()*1000)}_{idx:03d}_{uuid.uuid4().hex[:6]}{suffix}"
+            dest = upload_dir / filename
+            dest.write_bytes(data)
+            saved_items.append({
+                "original_name": item.get("name") or f"image_{idx+1}",
+                "url": f"/uploads/{filename}",
+                "path": str(dest.resolve()),
+                "size": len(data),
+            })
+
+    return {"ok": True, "images": saved_items}
 
 
 @app.post("/v1/videos/generations", response_model=TaskResponse)

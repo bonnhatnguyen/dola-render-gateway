@@ -14,6 +14,7 @@ accounts/
 
 # --- generated media ---
 downloads/
+uploads/
 
 # --- probe / debug artifacts (contain live session snippets) ---
 /*.html

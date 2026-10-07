@@ -855,20 +855,40 @@ tr:hover td { background: var(--color-paper-hover); }
             </div>
           </div>
 
-          <div style="display:flex;gap:8px">
-            <input id="gen_ref_input" class="form-control" placeholder="Dán URL ảnh (https://...jpg, png, webp) rồi nhấn Thêm hoặc Enter" onkeydown="if(event.key==='Enter'){event.preventDefault();addRefImage()}">
-            <button type="button" class="btn btn-p" onclick="addRefImage()" style="white-space:nowrap;padding:0 16px;gap:6px">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
-              Thêm ảnh
+          <!-- Hidden File Input for Multiple Images from Computer -->
+          <input type="file" id="local_ref_file_input" multiple accept="image/png,image/jpeg,image/webp,image/jpg" style="display:none" onchange="handleLocalFilesSelected(event)">
+
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button type="button" class="btn btn-p" onclick="document.getElementById('local_ref_file_input').click()" style="white-space:nowrap;padding:0 16px;gap:6px;background:var(--color-accent);color:#fff">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              📁 Tải ảnh từ máy tính
             </button>
-            <button type="button" class="btn" onclick="openMultiRefModal()" title="Dán danh sách nhiều URL cùng lúc" style="white-space:nowrap;padding:0 14px;gap:6px">
+
+            <input id="gen_ref_input" class="form-control" style="flex:1;min-width:220px" placeholder="Hoặc dán URL ảnh (https://...) rồi nhấn Thêm" onkeydown="if(event.key==='Enter'){event.preventDefault();addRefImage()}">
+            
+            <button type="button" class="btn" onclick="addRefImage()" style="white-space:nowrap;padding:0 14px;gap:6px">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line></svg>
+              Thêm URL
+            </button>
+            <button type="button" class="btn" onclick="openMultiRefModal()" title="Dán danh sách nhiều URL cùng lúc" style="white-space:nowrap;padding:0 13px;gap:6px">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
               Dán nhiều link
             </button>
           </div>
 
+          <!-- Drag and Drop Dropzone -->
+          <div id="ref_dropzone" style="margin-top:10px;padding:12px 16px;border:2px dashed var(--color-rule);border-radius:var(--radius-sm);text-align:center;background:var(--color-paper-2);cursor:pointer;transition:all 0.18s" onclick="document.getElementById('local_ref_file_input').click()" ondragover="event.preventDefault();this.style.borderColor='var(--color-accent)';this.style.background='var(--color-paper-3)'" ondragleave="this.style.borderColor='var(--color-rule)';this.style.background='var(--color-paper-2)'" ondrop="handleDropRefFiles(event)">
+            <div style="font-size:12.5px;color:var(--color-ink-2);display:flex;align-items:center;justify-content:center;gap:8px">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="17 8 12 3 7 8"></polyline><line x1="12" y1="3" x2="12" y2="15"></line></svg>
+              <span>Kéo thả nhiều ảnh từ máy tính vào đây (hoặc click để chọn nhiều file)</span>
+            </div>
+            <div style="font-size:11px;color:var(--color-ink-3);margin-top:4px">
+              ⚡ Ảnh sẽ được tải lên theo <b>đúng thứ tự bạn chọn</b> (#1, #2, #3...). Có nút <b>▲ Lên / ▼ Xuống</b> trên mỗi ảnh để đổi thứ tự tùy ý.
+            </div>
+          </div>
+
           <!-- Reference Images Grid Display -->
-          <div id="ref_images_container" style="display:none;margin-top:12px;grid-template-columns:repeat(auto-fill, minmax(220px, 1fr));gap:10px"></div>
+          <div id="ref_images_container" style="display:none;margin-top:12px;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:10px"></div>
           
           <div style="margin-top:7px;font-size:12px;color:var(--color-ink-3);line-height:1.5">
             💡 <b>Gợi ý:</b> ByteDance Seedance cho phép cung cấp nhiều ảnh tham chiếu để giữ tạo hình nhân vật, góc máy hoặc phong cách nhất quán. Tối đa <b>30 ảnh</b> (mỗi ảnh ≤ 15MB).
@@ -1403,13 +1423,20 @@ function updatePromptCount() {
   q('#prompt_char_count').textContent = `${val.length} ký tự`;
 }
 
+function getRefUrls() {
+  return referenceImagesList.map(item => {
+    if (typeof item === 'string') return item;
+    return item.url || item.name || item.previewUrl;
+  }).filter(Boolean);
+}
+
 function updateApiPayloadPreview() {
   const p = q('#gen_prompt').value;
   const m = q('#gen_model').value;
   const r = q('#gen_ratio').value;
   const d = parseInt(q('#gen_duration').value);
   const pendingInput = q('#gen_ref_input') ? q('#gen_ref_input').value.trim() : '';
-  let refs = [...referenceImagesList];
+  let refs = getRefUrls();
   if (pendingInput && (pendingInput.startsWith('http://') || pendingInput.startsWith('https://')) && !refs.includes(pendingInput)) {
     refs.push(pendingInput);
   }
@@ -1433,12 +1460,12 @@ function copyCurlSnippet() {
   const d = parseInt(q('#gen_duration').value);
   const curl = `curl -X POST http://127.0.0.1:8000/v1/videos/generations \\
   -H "Content-Type: application/json" \\
-  -d '${JSON.stringify({ model: m, prompt: p, ratio: r, duration: d, reference_images: referenceImagesList })}'`;
+  -d '${JSON.stringify({ model: m, prompt: p, ratio: r, duration: d, reference_images: getRefUrls() })}'`;
   copy(curl);
   toast('Đã sao chép cURL snippet vào clipboard!', 'success');
 }
 
-/* Reference Images Multi-Selector */
+/* Reference Images Multi-Selector & Ordering */
 function renderRefImages() {
   const container = q('#ref_images_container');
   const countEl = q('#ref_img_count');
@@ -1456,25 +1483,99 @@ function renderRefImages() {
     countEl.classList.remove('b-blue');
   }
 
-  container.innerHTML = referenceImagesList.map((url, idx) => {
-    let domain = 'image';
-    try { domain = new URL(url).hostname; } catch(e) {}
+  container.innerHTML = referenceImagesList.map((item, idx) => {
+    const isObj = typeof item === 'object' && item !== null;
+    const previewUrl = isObj ? (item.previewUrl || item.url) : item;
+    const displayName = isObj ? item.name : item;
+    const isLocal = isObj && item.type === 'local';
+    let sizeStr = '';
+    if (isObj && item.size) {
+      sizeStr = `(${(item.size / 1024 / 1024).toFixed(1)} MB)`;
+    }
+
     return `
-      <div class="ref-thumb-card">
-        <img src="${esc(url)}" alt="Ref ${idx+1}" onerror="this.style.display='none';const fb=this.parentElement.querySelector('.ref-fallback-icon');if(fb)fb.style.display='flex';" style="width:38px;height:38px;border-radius:6px;object-fit:cover;border:1px solid var(--color-rule);flex-shrink:0;background:var(--color-paper-3)">
-        <div class="ref-fallback-icon" style="display:none;width:38px;height:38px;border-radius:6px;border:1px solid var(--color-rule);background:var(--color-paper-3);align-items:center;justify-content:center;color:var(--color-ink-3);font-size:10px;font-weight:600;flex-shrink:0">IMG</div>
+      <div class="ref-thumb-card" style="padding:7px 10px;gap:9px">
+        <img src="${esc(previewUrl)}" alt="Ref #${idx+1}" onerror="this.style.display='none';const fb=this.parentElement.querySelector('.ref-fallback-icon');if(fb)fb.style.display='flex';" style="width:42px;height:42px;border-radius:6px;object-fit:cover;border:1px solid var(--color-rule);flex-shrink:0;background:var(--color-paper-3)">
+        <div class="ref-fallback-icon" style="display:none;width:42px;height:42px;border-radius:6px;border:1px solid var(--color-rule);background:var(--color-paper-3);align-items:center;justify-content:center;color:var(--color-ink-3);font-size:10px;font-weight:600;flex-shrink:0">IMG</div>
         <div style="flex:1;min-width:0">
-          <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px">
-            <span class="badge" style="padding:1px 5px;font-size:10px;line-height:1.2">#${idx + 1}</span>
-            <span style="font-size:11px;color:var(--color-ink-3);font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(domain)}</span>
+          <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+            <span class="badge b-blue" style="padding:1px 6px;font-size:10.5px;font-weight:700;line-height:1.2">#${idx + 1}</span>
+            <span style="font-size:10px;color:var(--color-ink-3);font-weight:600;text-transform:uppercase">${isLocal ? '📁 MÁY TÍNH' : '🌐 URL'} ${sizeStr}</span>
           </div>
-          <div style="font-size:11.5px;font-family:var(--font-mono);color:var(--color-ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(url)}">${esc(url)}</div>
+          <div style="font-size:11.5px;font-family:var(--font-mono);color:var(--color-ink-1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(displayName)}">${esc(displayName)}</div>
         </div>
-        <button type="button" class="btn btn-sm" style="padding:2px 6px;border-color:transparent;color:var(--color-danger)" onclick="removeRefImage(${idx})" title="Xóa ảnh">✕</button>
+        <div style="display:flex;align-items:center;gap:3px;flex-shrink:0">
+          <button type="button" class="btn btn-sm" style="padding:2px 6px;font-size:11px" onclick="moveRefImage(${idx}, -1)" ${idx === 0 ? 'disabled style="opacity:0.25;cursor:not-allowed"' : ''} title="Đổi lên trước">▲</button>
+          <button type="button" class="btn btn-sm" style="padding:2px 6px;font-size:11px" onclick="moveRefImage(${idx}, 1)" ${idx === referenceImagesList.length - 1 ? 'disabled style="opacity:0.25;cursor:not-allowed"' : ''} title="Đổi xuống sau">▼</button>
+          <button type="button" class="btn btn-sm" style="padding:2px 6px;color:var(--color-danger);margin-left:2px" onclick="removeRefImage(${idx})" title="Xóa ảnh">✕</button>
+        </div>
       </div>
     `;
   }).join('');
   updateApiPayloadPreview();
+}
+
+function moveRefImage(idx, dir) {
+  const target = idx + dir;
+  if (target < 0 || target >= referenceImagesList.length) return;
+  const temp = referenceImagesList[idx];
+  referenceImagesList[idx] = referenceImagesList[target];
+  referenceImagesList[target] = temp;
+  renderRefImages();
+  toast(`Đã đổi vị trí ảnh thành #${target + 1}`, 'info');
+}
+
+function handleLocalFilesSelected(event) {
+  const files = event.target ? event.target.files : event;
+  if (!files || files.length === 0) return;
+  addLocalFiles(Array.from(files));
+  if (event.target) event.target.value = '';
+}
+
+function handleDropRefFiles(event) {
+  event.preventDefault();
+  const dropzone = q('#ref_dropzone');
+  if (dropzone) {
+    dropzone.style.borderColor = 'var(--color-rule)';
+    dropzone.style.background = 'var(--color-paper-2)';
+  }
+  const dt = event.dataTransfer;
+  if (dt && dt.files && dt.files.length > 0) {
+    addLocalFiles(Array.from(dt.files));
+  }
+}
+
+function addLocalFiles(fileList) {
+  let added = 0;
+  for (const file of fileList) {
+    if (!file.type.startsWith('image/') && !file.name.match(/\.(jpg|jpeg|png|webp)$/i)) {
+      toast(`File "${file.name}" không phải định dạng ảnh hỗ trợ!`, 'error');
+      continue;
+    }
+    if (file.size > 15 * 1024 * 1024) {
+      toast(`File "${file.name}" vượt quá giới hạn 15MB!`, 'error');
+      continue;
+    }
+    if (referenceImagesList.length >= 30) {
+      toast('Đã đạt giới hạn tối đa 30 ảnh tham chiếu!', 'error');
+      break;
+    }
+    const item = {
+      id: 'local_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+      type: 'local',
+      file: file,
+      name: file.name,
+      size: file.size,
+      previewUrl: URL.createObjectURL(file),
+      url: null
+    };
+    referenceImagesList.push(item);
+    added++;
+  }
+  renderRefImages();
+  if (added > 0) {
+    toast(`Đã thêm ${added} ảnh từ máy tính theo thứ tự chọn!`, 'success');
+  }
 }
 
 function addRefImage() {
@@ -1488,10 +1589,19 @@ function addRefImage() {
   if (referenceImagesList.length >= 30) {
     return toast('Đã đạt giới hạn tối đa 30 ảnh tham chiếu!', 'error');
   }
-  if (referenceImagesList.includes(val)) {
+  const exists = referenceImagesList.some(i => (typeof i === 'string' ? i === val : i.url === val));
+  if (exists) {
     return toast('Ảnh này đã có trong danh sách tham chiếu!', 'info');
   }
-  referenceImagesList.push(val);
+  referenceImagesList.push({
+    id: 'url_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+    type: 'url',
+    file: null,
+    name: val,
+    size: null,
+    previewUrl: val,
+    url: val
+  });
   input.value = '';
   renderRefImages();
   toast(`Đã thêm ảnh tham chiếu #${referenceImagesList.length}`, 'success');
@@ -1499,6 +1609,10 @@ function addRefImage() {
 
 function removeRefImage(idx) {
   if (idx >= 0 && idx < referenceImagesList.length) {
+    const item = referenceImagesList[idx];
+    if (typeof item === 'object' && item.previewUrl && item.previewUrl.startsWith('blob:')) {
+      URL.revokeObjectURL(item.previewUrl);
+    }
     referenceImagesList.splice(idx, 1);
     renderRefImages();
   }
@@ -1506,6 +1620,11 @@ function removeRefImage(idx) {
 
 function clearAllRefImages() {
   if (confirm('Bạn có chắc muốn xóa tất cả ảnh tham chiếu?')) {
+    referenceImagesList.forEach(item => {
+      if (typeof item === 'object' && item.previewUrl && item.previewUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(item.previewUrl);
+      }
+    });
     referenceImagesList = [];
     renderRefImages();
     toast('Đã làm trống danh sách ảnh tham chiếu', 'info');
@@ -1526,13 +1645,25 @@ function submitBulkRefUrls() {
   if (lines.length === 0) return toast('Vui lòng nhập ít nhất một đường dẫn ảnh!', 'error');
   let added = 0;
   for (const line of lines) {
-    if ((line.startsWith('http://') || line.startsWith('https://')) && !referenceImagesList.includes(line)) {
-      if (referenceImagesList.length < 30) { referenceImagesList.push(line); added++; }
+    if (line.startsWith('http://') || line.startsWith('https://')) {
+      const exists = referenceImagesList.some(i => (typeof i === 'string' ? i === line : i.url === line));
+      if (!exists && referenceImagesList.length < 30) {
+        referenceImagesList.push({
+          id: 'url_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
+          type: 'url',
+          file: null,
+          name: line,
+          size: null,
+          previewUrl: line,
+          url: line
+        });
+        added++;
+      }
     }
   }
   closeMultiRefModal();
   renderRefImages();
-  if (added > 0) toast(`Đã thêm thành công ${added} ảnh tham chiếu!`, 'success');
+  if (added > 0) toast(`Đã thêm thành công ${added} ảnh tham chiếu theo thứ tự!`, 'success');
 }
 
 /* Video Generation Submit & Polling */
@@ -1559,33 +1690,77 @@ async function submitGenerateVideo() {
   const duration = parseInt(q('#gen_duration').value);
 
   const pendingInput = q('#gen_ref_input') ? q('#gen_ref_input').value.trim() : '';
-  let finalRefImages = [...referenceImagesList];
   if (pendingInput && (pendingInput.startsWith('http://') || pendingInput.startsWith('https://'))) {
-    if (!finalRefImages.includes(pendingInput) && finalRefImages.length < 30) {
-      finalRefImages.push(pendingInput);
+    const exists = referenceImagesList.some(i => (typeof i === 'string' ? i === pendingInput : i.url === pendingInput));
+    if (!exists && referenceImagesList.length < 30) {
+      referenceImagesList.push({
+        id: 'url_' + Date.now(),
+        type: 'url',
+        file: null,
+        name: pendingInput,
+        size: null,
+        previewUrl: pendingInput,
+        url: pendingInput
+      });
+      renderRefImages();
     }
   }
 
-  const body = {
-    model: model,
-    prompt: prompt,
-    ratio: ratio,
-    duration: duration,
-    reference_images: finalRefImages
-  };
-
   const btn = q('#btn_submit_gen');
   btn.disabled = true;
-  q('#gen_msg').textContent = 'Đang gửi yêu cầu...';
+  q('#gen_msg').textContent = 'Đang xử lý ảnh tham chiếu...';
   q('#gen_status_badge').className = 'badge b-amber';
   q('#gen_status_badge').textContent = 'Processing';
   q('#gen_status_box').style.background = 'var(--color-paper-3)';
   q('#gen_status_box').style.border = '1px solid var(--color-rule)';
   q('#gen_spinner').style.display = 'inline-block';
-  q('#gen_status_text').textContent = 'Đang khởi tạo tác vụ (Creating task)...';
   hide('gen_video_container');
 
   try {
+    // 1. Upload any local files from computer in strict user-selected sequence
+    const localItems = referenceImagesList.filter(i => (typeof i === 'object' && i.file && !i.url));
+    if (localItems.length > 0) {
+      q('#gen_status_text').textContent = `Đang tải ${localItems.length} ảnh từ máy tính lên server theo thứ tự...`;
+      const formData = new FormData();
+      for (const item of localItems) {
+        formData.append('files', item.file, item.name);
+      }
+      const upResp = await fetch('/api/upload-reference-images', {
+        method: 'POST',
+        body: formData
+      });
+      if (!upResp.ok) {
+        const errJson = await upResp.json().catch(() => ({}));
+        throw new Error(errJson.detail || 'Lỗi khi tải ảnh từ máy tính lên server');
+      }
+      const upData = await upResp.json();
+      let upIdx = 0;
+      for (const item of referenceImagesList) {
+        if (typeof item === 'object' && item.file && !item.url) {
+          if (upData.images && upData.images[upIdx]) {
+            item.url = upData.images[upIdx].url;
+            upIdx++;
+          }
+        }
+      }
+    }
+
+    // 2. Build final reference images list strictly preserving user's order
+    const finalRefImages = referenceImagesList.map(item => {
+      if (typeof item === 'string') return item;
+      return item.url || item.previewUrl;
+    }).filter(Boolean);
+
+    q('#gen_status_text').textContent = 'Đang khởi tạo tác vụ (Creating task)...';
+
+    const body = {
+      model: model,
+      prompt: prompt,
+      ratio: ratio,
+      duration: duration,
+      reference_images: finalRefImages
+    };
+
     const resp = await fetch('/v1/videos/generations', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

@@ -848,7 +848,7 @@ tr:hover td { background: var(--color-paper-hover); }
           <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">
             <div class="form-label" style="margin-bottom:0"><span>Ảnh tham chiếu (Reference Images — Multi-image)</span></div>
             <div style="display:flex;align-items:center;gap:8px">
-              <span id="ref_img_count" class="badge" style="font-size:11px;font-weight:600">0 / 30 ảnh</span>
+              <span id="ref_img_count" class="badge" style="font-size:11px;font-weight:600">0 / 10 ảnh</span>
               <button id="ref_clear_all_btn" type="button" class="btn btn-sm" onclick="clearAllRefImages()" style="display:none;padding:2px 8px;font-size:11px;color:var(--color-danger)">
                 Xóa tất cả
               </button>
@@ -891,7 +891,7 @@ tr:hover td { background: var(--color-paper-hover); }
           <div id="ref_images_container" style="display:none;margin-top:12px;grid-template-columns:repeat(auto-fill, minmax(260px, 1fr));gap:10px"></div>
           
           <div style="margin-top:7px;font-size:12px;color:var(--color-ink-3);line-height:1.5">
-            💡 <b>Gợi ý:</b> ByteDance Seedance cho phép cung cấp nhiều ảnh tham chiếu để giữ tạo hình nhân vật, góc máy hoặc phong cách nhất quán. Tối đa <b>30 ảnh</b> (mỗi ảnh ≤ 15MB).
+            💡 <b>Gợi ý:</b> ByteDance Seedance trên Dola hỗ trợ tối đa <b>10 ảnh tham chiếu</b> (mỗi ảnh ≤ 15MB) để giữ tạo hình nhân vật, góc máy và phong cách nhất quán.
           </div>
         </div>
 
@@ -1472,7 +1472,7 @@ function renderRefImages() {
   const clearBtn = q('#ref_clear_all_btn');
   if (!container || !countEl) return;
 
-  countEl.textContent = `${referenceImagesList.length} / 30 ảnh`;
+  countEl.textContent = `${referenceImagesList.length} / 10 ảnh`;
   if (referenceImagesList.length > 0) {
     container.style.display = 'grid';
     if (clearBtn) clearBtn.style.display = 'inline-block';
@@ -1556,8 +1556,8 @@ function addLocalFiles(fileList) {
       toast(`File "${file.name}" vượt quá giới hạn 15MB!`, 'error');
       continue;
     }
-    if (referenceImagesList.length >= 30) {
-      toast('Đã đạt giới hạn tối đa 30 ảnh tham chiếu!', 'error');
+    if (referenceImagesList.length >= 10) {
+      toast('Đã đạt giới hạn tối đa 10 ảnh tham chiếu của Dola!', 'error');
       break;
     }
     const item = {
@@ -1595,8 +1595,8 @@ function addRefImage() {
   if (!val.startsWith('http://') && !val.startsWith('https://')) {
     return toast('Vui lòng nhập đường dẫn URL hợp lệ (http:// hoặc https://)', 'error');
   }
-  if (referenceImagesList.length >= 30) {
-    return toast('Đã đạt giới hạn tối đa 30 ảnh tham chiếu!', 'error');
+  if (referenceImagesList.length >= 10) {
+    return toast('Đã đạt giới hạn tối đa 10 ảnh tham chiếu của Dola!', 'error');
   }
   const exists = referenceImagesList.some(i => (typeof i === 'string' ? i === val : i.url === val));
   if (exists) {
@@ -1656,7 +1656,7 @@ function submitBulkRefUrls() {
   for (const line of lines) {
     if (line.startsWith('http://') || line.startsWith('https://')) {
       const exists = referenceImagesList.some(i => (typeof i === 'string' ? i === line : i.url === line));
-      if (!exists && referenceImagesList.length < 30) {
+      if (!exists && referenceImagesList.length < 10) {
         referenceImagesList.push({
           id: 'url_' + Date.now() + '_' + Math.random().toString(36).substr(2, 6),
           type: 'url',
@@ -1701,7 +1701,7 @@ async function submitGenerateVideo() {
   const pendingInput = q('#gen_ref_input') ? q('#gen_ref_input').value.trim() : '';
   if (pendingInput && (pendingInput.startsWith('http://') || pendingInput.startsWith('https://'))) {
     const exists = referenceImagesList.some(i => (typeof i === 'string' ? i === pendingInput : i.url === pendingInput));
-    if (!exists && referenceImagesList.length < 30) {
+    if (!exists && referenceImagesList.length < 10) {
       referenceImagesList.push({
         id: 'url_' + Date.now(),
         type: 'url',

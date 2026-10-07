@@ -164,6 +164,12 @@ async def attach_reference_images(page, image_paths: list[str]) -> None:
     """Uploads reference images through native file input and waits for TOS upload."""
     if not image_paths:
         return
+
+    # Dola hard limit: max 10 images per message
+    if len(image_paths) > 10:
+        print(f"[upload] Dola chỉ hỗ trợ tối đa 10 ảnh tham chiếu. Tự động lấy 10 ảnh đầu tiên (trong tổng số {len(image_paths)} ảnh).", flush=True)
+        image_paths = image_paths[:10]
+
     file_input = page.locator('input[type="file"]').first
     await file_input.wait_for(state="attached", timeout=10000)
     events = []
@@ -177,19 +183,34 @@ async def attach_reference_images(page, image_paths: list[str]) -> None:
     try:
         await file_input.set_input_files(image_paths)
         expected = len(image_paths)
-        deadline = time.time() + max(60, expected * 20)
+        deadline = time.time() + max(60, expected * 15)
+        last_change_time = time.time()
+        last_count = 0
+
         while time.time() < deadline:
             prepare_count = sum("/alice/resource/prepare_upload" in url and 200 <= status < 300
                                 for status, url in events)
             tos_count = sum("/upload/v1/" in url and 200 <= status < 300
                             for status, url in events)
-            # Wait for thumbnails and TOS completion before sending
-            thumb_count = await page.locator('img[alt]').count()
-            if prepare_count >= expected and tos_count >= expected and thumb_count >= expected:
-                await page.wait_for_timeout(800)
-                print(f"[upload] Reference images uploaded: {expected} image(s)", flush=True)
+
+            # 1. Đã upload đủ số lượng mong muốn
+            if prepare_count >= expected and tos_count >= expected:
+                await page.wait_for_timeout(1000)
+                print(f"[upload] Reference images uploaded successfully: {expected} image(s)", flush=True)
                 return
+
+            # 2. Theo dõi nếu số lượng đã ổn định (Dola đã nhận hết ảnh mà nó chấp nhận)
+            current_done = min(prepare_count, tos_count)
+            if current_done != last_count:
+                last_count = current_done
+                last_change_time = time.time()
+            elif current_done > 0 and (time.time() - last_change_time > 7):
+                await page.wait_for_timeout(1000)
+                print(f"[upload] Reference images stabilized at {current_done}/{expected} image(s)", flush=True)
+                return
+
             await page.wait_for_timeout(250)
+
         raise TimeoutError(
             f"Reference image upload timeout: prepare={prepare_count}/{expected}, tos={tos_count}/{expected}"
         )

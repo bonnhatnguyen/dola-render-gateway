@@ -100,7 +100,9 @@ def _get_local_reference_path(raw: str) -> Path | None:
 async def validate_reference_urls(urls: list[str]) -> list[str]:
     """Validates public URLs, local files, and base64 data URIs while preserving exact order."""
     if len(urls) > config.REFERENCE_IMAGE_MAX_COUNT:
-        raise ValueError(f"Tối đa {config.REFERENCE_IMAGE_MAX_COUNT} ảnh tham chiếu được phép")
+        raise ValueError(
+            f"Dola chỉ hỗ trợ tối đa {config.REFERENCE_IMAGE_MAX_COUNT} ảnh tham chiếu trong 1 video (bạn đang gửi {len(urls)} ảnh)"
+        )
     normalized = []
     for raw in urls:
         if not isinstance(raw, str) or not raw.strip():

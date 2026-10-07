@@ -193,26 +193,27 @@ async def attach_reference_images(page, image_paths: list[str]) -> None:
             tos_count = sum("/upload/v1/" in url and 200 <= status < 300
                             for status, url in events)
 
-            # 1. Đã upload đủ số lượng mong muốn
-            if prepare_count >= expected and tos_count >= expected:
+            # 1. Đã upload đủ số lượng mong muốn lên TOS
+            # Lưu ý: Dola gộp (batch) các yêu cầu prepare_upload nên prepare_count thường nhỏ hơn expected (chỉ 1-3 lần).
+            # Chỉ số đo lường chính xác cho từng file là TOS upload (/upload/v1/).
+            if tos_count >= expected:
                 await page.wait_for_timeout(1000)
-                print(f"[upload] Reference images uploaded successfully: {expected} image(s)", flush=True)
+                print(f"[upload] Reference images uploaded successfully: {expected} image(s) (tos={tos_count}, prep={prepare_count})", flush=True)
                 return
 
-            # 2. Theo dõi nếu số lượng đã ổn định (Dola đã nhận hết ảnh mà nó chấp nhận)
-            current_done = min(prepare_count, tos_count)
-            if current_done != last_count:
-                last_count = current_done
+            # 2. Theo dõi nếu số lượng đã ổn định (Dola đã nạp hết số file chấp nhận)
+            if tos_count != last_count:
+                last_count = tos_count
                 last_change_time = time.time()
-            elif current_done > 0 and (time.time() - last_change_time > 7):
+            elif tos_count > 0 and (time.time() - last_change_time > 6):
                 await page.wait_for_timeout(1000)
-                print(f"[upload] Reference images stabilized at {current_done}/{expected} image(s)", flush=True)
+                print(f"[upload] Reference images stabilized at {tos_count}/{expected} image(s)", flush=True)
                 return
 
             await page.wait_for_timeout(250)
 
         raise TimeoutError(
-            f"Reference image upload timeout: prepare={prepare_count}/{expected}, tos={tos_count}/{expected}"
+            f"Reference image upload timeout: tos={tos_count}/{expected}, prepare={prepare_count}"
         )
     finally:
         page.remove_listener("response", on_response)

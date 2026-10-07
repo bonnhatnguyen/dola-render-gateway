@@ -352,7 +352,11 @@ class BrowserPool:
                         def on_balance(balance, source=""):
                             self._set_credit_balance(account, balance, source)
 
-                        result = await generate_video(
+                        import importlib
+                        import video_worker_ui
+                        importlib.reload(video_worker_ui)
+
+                        result = await video_worker_ui.generate_video(
                             account, prompt, ratio, duration, model=model,
                             on_conversation_id=on_conversation_id, on_poll=on_poll,
                             on_balance=on_balance, reference_image_paths=reference_image_paths)

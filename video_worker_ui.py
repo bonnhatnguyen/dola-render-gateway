@@ -414,12 +414,71 @@ async def resume_video(account: str, conversation_id: str, timeout: int,
             await context.close()
 
 
+def sanitize_prompt(text: str) -> str:
+    """
+    Removes duration mentions from prompt to prevent Dola's LLM chatbot from intercepting
+    the request with conversational refusals (e.g. '30-second version not supported').
+    Duration is injected via protocol / UI dropdown instead.
+    """
+    if not text:
+        return text
+
+    cleaned = text
+    # 1. Phrases like 'with a duration of 30 seconds', 'lasting 30s', 'length of 30 seconds'
+    cleaned = re.sub(
+        r"(?i)\b(?:with\s+a\s+)?(?:duration|length)\s+(?:of\s+)?\d+[- ]*(?:seconds?|secs?|s|giây)\b",
+        "",
+        cleaned,
+    )
+    # 2. 'finish(ed)? at exactly \d+ seconds/s'
+    cleaned = re.sub(
+        r"(?i)\bfinish(?:ed)?\s+at\s+exactly\s+\d+[- ]*(?:seconds?|secs?|s|giây)\b",
+        "",
+        cleaned,
+    )
+    # 3. Time ranges like '0-5s', '15-30s', '0s-5s', '0 to 5 seconds', '(0-5s)'
+    cleaned = re.sub(
+        r"(?i)\(?\s*\b\d+\s*s?\s*[-–to]+\s*\d+\s*(?:seconds?|secs?|s|giây)\b\s*\)?",
+        "",
+        cleaned,
+    )
+    # 4. 'dài \d+ giây/s' or 'thời lượng \d+ giây/s'
+    cleaned = re.sub(
+        r"(?i)\b(?:với\s+)?(?:dài|thời lượng)\s+\d+[- ]*(?:giây|s)\b",
+        "",
+        cleaned,
+    )
+    # 5. '\d+[- ]*(second|seconds|sec|giây)' e.g. '30-second', '30 seconds', '15 second', '30 giây'
+    cleaned = re.sub(
+        r"(?i)\b\d+[- ]*(?:seconds?|secs?|giây)\b",
+        "",
+        cleaned,
+    )
+    # 6. Standalone '\d+s' like '30s', '15s', '10s'
+    cleaned = re.sub(
+        r"(?i)(?<=\s)\d+s\b|^\d+s\b|\b\d+s(?=\s|[.,;:!?\)])",
+        "",
+        cleaned,
+    )
+    # Remove empty parens left by removed timestamps
+    cleaned = re.sub(r"\(\s*\)", "", cleaned)
+    # Clean up spaces before punctuation
+    cleaned = re.sub(r"\s+([,.:;?!])", r"\1", cleaned)
+    cleaned = re.sub(r"([,;])\s*([,;])", r"\1", cleaned)
+    # Clean up double spaces while preserving line breaks
+    lines = [re.sub(r"[ \t]+", " ", line).strip() for line in cleaned.splitlines()]
+    return "\n".join(lines).strip()
+
+
 async def generate_video(account: str, prompt: str, ratio: str = None,
                          duration: int = None, timeout: int = None,
                          model: str = "seedance_v2.0", use_extension: bool = True,
                          on_conversation_id=None, on_poll=None, on_balance=None,
                          reference_image_paths: list[str] | None = None) -> dict:
     """Full generation flow via UI automation."""
+    prompt_to_send = sanitize_prompt(prompt)
+    if prompt_to_send != prompt:
+        print(f"[{account}] Prompt sanitized to prevent Dola LLM duration refusal", flush=True)
     timeout = timeout or config.VIDEO_TIMEOUT
     model_key = model.lower().replace("-", "_")
     if model_key in ("seedance_2.5", "seedance_v2.5", "seedance_25", "seedance_v25"):
@@ -533,7 +592,7 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
                         }
                     } catch (e) {}
                     return false;
-                }""", prompt)
+                }""", prompt_to_send)
                 await page.keyboard.press("Control+v")
                 await page.wait_for_timeout(200)
             except Exception:
@@ -544,7 +603,7 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
             )
             if not content_in_box:
                 try:
-                    await page.keyboard.insert_text(prompt)
+                    await page.keyboard.insert_text(prompt_to_send)
                     await page.wait_for_timeout(200)
                 except Exception:
                     pass
@@ -556,15 +615,15 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
                 try:
                     tag = await box.evaluate("(el) => el.tagName.toLowerCase()")
                     if tag in ("textarea", "input"):
-                        await box.fill(prompt)
+                        await box.fill(prompt_to_send)
                     else:
-                        await page.keyboard.type(prompt, delay=1)
+                        await page.keyboard.type(prompt_to_send, delay=1)
                 except Exception:
-                    await page.keyboard.type(prompt, delay=2)
+                    await page.keyboard.type(prompt_to_send, delay=2)
 
             await page.wait_for_timeout(400)
             await page.keyboard.press("Enter")
-            print(f"[{account}] UI submitted prompt: {prompt[:40]}", flush=True)
+            print(f"[{account}] UI submitted prompt: {prompt_to_send[:40]}", flush=True)
 
             # ---- Captcha Solver (up to 3 attempts) ----
             solved_or_absent = False

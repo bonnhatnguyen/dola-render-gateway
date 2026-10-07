@@ -503,14 +503,19 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
                     print(f"  (Failed to set ratio, using default: {str(e)[:80]})", flush=True)
             if duration:
                 try:
-                    await page.click(f"text={duration}s", timeout=3000)
-                except Exception:
-                    try:  # Open duration dropdown
-                        await page.get_by_text(re.compile(r"^\d+s$")).first.click(timeout=3000)
-                        await page.wait_for_timeout(500)
-                        await page.click(f"text={duration}s", timeout=3000)
-                    except Exception as e:
-                        print(f"  (Failed to set duration, using default: {str(e)[:80]})", flush=True)
+                    dur_btn = page.locator('text=/\\d+s/').first
+                    if await dur_btn.count():
+                        cur_text = (await dur_btn.text_content() or "").strip()
+                        if f"{duration}s" not in cur_text:
+                            await dur_btn.click(timeout=3000)
+                            await page.wait_for_timeout(500)
+                            opt = page.locator(f"text={duration}s").first
+                            if await opt.count() and await opt.is_visible():
+                                await opt.click(timeout=3000)
+                                await page.wait_for_timeout(500)
+                                print(f"[ui] Duration set to {duration}s", flush=True)
+                except Exception as e:
+                    print(f"  (Failed to set duration, using default: {str(e)[:80]})", flush=True)
 
             box = await page.query_selector("textarea") or await page.query_selector('[contenteditable="true"]')
             if not box:

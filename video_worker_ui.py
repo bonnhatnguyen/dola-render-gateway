@@ -522,7 +522,18 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
             await _preflight_balance(page, ms_token, fp, config.VIDEO_REQUIRED_POINTS)
 
             # ---- UI Submission ----
-            await page.click(VIDEO_BTN)
+            clicked_video_btn = False
+            for selector in ("text=動画を作成", "text=Create Videos", "text=生成视频", "text=创建视频"):
+                loc = page.locator(selector).first
+                if await loc.count() and await loc.is_visible():
+                    await loc.click()
+                    clicked_video_btn = True
+                    break
+            if not clicked_video_btn:
+                try:
+                    await page.click(VIDEO_BTN, timeout=3000)
+                except Exception:
+                    pass
             await page.wait_for_timeout(1500)
             if reference_image_paths:
                 await attach_reference_images(page, reference_image_paths)

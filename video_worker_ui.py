@@ -583,28 +583,31 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
                     await page.wait_for_timeout(500)
             except Exception as e:
                 print(f"  (Failed to set model {model_key}: {str(e)[:120]})", flush=True)
-            if ratio:
+            # Set ratio and duration (supports both new combined popover and legacy separate buttons)
+            if ratio or duration:
                 try:
-                    await page.click("text=比率", timeout=3000)
-                    await page.wait_for_timeout(500)
-                    await page.click(f"text={ratio}", timeout=3000)
+                    panel_trigger = page.locator('text=/\\d+[s秒]|比率|アスペクト|Ratio|Duration/').first
+                    if await panel_trigger.count() and await panel_trigger.is_visible():
+                        await panel_trigger.click(timeout=3000)
+                        await page.wait_for_timeout(500)
+                        if ratio:
+                            ratio_opt = page.locator(f'text={ratio}').first
+                            if await ratio_opt.count() and await ratio_opt.is_visible():
+                                await ratio_opt.click(timeout=2000)
+                                await page.wait_for_timeout(300)
+                                print(f"[ui] Ratio set to {ratio}", flush=True)
+                        if duration:
+                            for dur_sel in (f"text={duration}s", f"text={duration}秒", f"text={duration}"):
+                                dur_opt = page.locator(dur_sel).first
+                                if await dur_opt.count() and await dur_opt.is_visible():
+                                    await dur_opt.click(timeout=2000)
+                                    await page.wait_for_timeout(300)
+                                    print(f"[ui] Duration set to {duration}", flush=True)
+                                    break
+                        await page.keyboard.press("Escape")
+                        await page.wait_for_timeout(300)
                 except Exception as e:
-                    print(f"  (Failed to set ratio, using default: {str(e)[:80]})", flush=True)
-            if duration:
-                try:
-                    dur_btn = page.locator('text=/\\d+s/').first
-                    if await dur_btn.count():
-                        cur_text = (await dur_btn.text_content() or "").strip()
-                        if f"{duration}s" not in cur_text:
-                            await dur_btn.click(timeout=3000)
-                            await page.wait_for_timeout(500)
-                            opt = page.locator(f"text={duration}s").first
-                            if await opt.count() and await opt.is_visible():
-                                await opt.click(timeout=3000)
-                                await page.wait_for_timeout(500)
-                                print(f"[ui] Duration set to {duration}s", flush=True)
-                except Exception as e:
-                    print(f"  (Failed to set duration, using default: {str(e)[:80]})", flush=True)
+                    print(f"  (Failed to set ratio/duration: {str(e)[:100]})", flush=True)
 
             box = await page.query_selector("textarea") or await page.query_selector('[contenteditable="true"]')
             if not box:

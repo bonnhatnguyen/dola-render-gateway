@@ -517,6 +517,14 @@ async def generate_video(account: str, prompt: str, ratio: str = None,
             page = context.pages[0] if context.pages else await context.new_page()
             await page.goto("https://www.dola.com/chat", timeout=60000, wait_until="domcontentloaded")
             await page.wait_for_timeout(5000)
+            # Dismiss any promo popups / cookie banners
+            try:
+                await page.keyboard.press("Escape")
+                cookie_ok = page.locator('button:has-text("OK"), button:has-text("同意"), button:has-text("Accept")').first
+                if await cookie_ok.count() and await cookie_ok.is_visible():
+                    await cookie_ok.click(timeout=1000)
+            except Exception:
+                pass
             cookies = await context.cookies("https://www.dola.com")
             ms_token, fp = cookie_value(cookies, "msToken"), cookie_value(cookies, "s_v_web_id")
             await _preflight_balance(page, ms_token, fp, config.VIDEO_REQUIRED_POINTS)
